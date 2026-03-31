@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { isRecord, normalizeVerdict } from './utils'
 import type { Evaluation, Submission, Verdict } from '../types'
 
 export type EvaluationRow = {
@@ -14,17 +15,16 @@ export type EvaluationRow = {
   created_at: string
 }
 
-type JudgeNameRow = {
+type RawEvaluationWithJudge = {
   id: string
-  name: string
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-function normalizeVerdict(value: unknown): Verdict {
-  return value === 'pass' || value === 'fail' || value === 'inconclusive' ? value : 'inconclusive'
+  submission_id: string
+  question_id: string
+  judge_id: string
+  verdict: string
+  reasoning: string
+  error: string | null
+  created_at: string
+  judges: { id: string; name: string } | null
 }
 
 /**
@@ -82,25 +82,11 @@ export async function listEvaluations(): Promise<
     submission_id: String(row.submission_id),
     question_id: String(row.question_id),
     judge_id: String(row.judge_id),
-    verdict: normalizeVerdict(row.verdict),
+    verdict: normalizeVerdict(typeof row.verdict === 'string' ? row.verdict : ''),
     reasoning: typeof row.reasoning === 'string' ? row.reasoning : '',
     error: row.error === null || typeof row.error === 'string' ? row.error : null,
     created_at: typeof row.created_at === 'string' ? row.created_at : String(row.created_at ?? ''),
   }))
-}
-
-async function fetchJudgesByIds(judgeIds: string[]): Promise<Map<string, string>> {
-  if (judgeIds.length === 0) return new Map()
-
-  const { data, error } = await supabase.from('judges').select('id, name').in('id', judgeIds)
-
-  if (error) throw new Error(error.message)
-
-  const map = new Map<string, string>()
-  for (const row of (data ?? []) as JudgeNameRow[]) {
-    map.set(row.id, row.name)
-  }
-  return map
 }
 
 async function fetchSubmissionsByIds(submissionIds: string[]): Promise<Submission[]> {
@@ -116,38 +102,37 @@ async function fetchSubmissionsByIds(submissionIds: string[]): Promise<Submissio
 }
 
 /**
- * Loads evaluations with judge names and question text resolved from submissions JSONB.
+ * Loads evaluations with judge names (via join) and question text resolved from submissions JSONB.
  */
 export async function fetchEvaluationsWithContext(): Promise<EvaluationRow[]> {
-  const evaluations = await listEvaluations()
+  const { data, error } = await supabase
+    .from('evaluations')
+    .select('*, judges(id, name)')
+    .order('created_at', { ascending: false })
 
-  const judgeIds = [...new Set(evaluations.map((e) => e.judge_id))]
-  const submissionIds = [...new Set(evaluations.map((e) => e.submission_id))]
+  if (error) throw new Error(error.message)
 
-  const [judgeNames, submissions] = await Promise.all([
-    fetchJudgesByIds(judgeIds),
-    fetchSubmissionsByIds(submissionIds),
-  ])
+  const rows = (data ?? []) as RawEvaluationWithJudge[]
 
+  const submissionIds = [...new Set(rows.map((r) => r.submission_id))]
+  const submissions = await fetchSubmissionsByIds(submissionIds)
   const questionLookup = buildQuestionTextLookup(submissions)
 
-  return evaluations.map((ev) => {
-    const judgeName = judgeNames.get(ev.judge_id) ?? 'Unknown judge'
-    const perSubmission = questionLookup.get(ev.submission_id)
+  return rows.map((row) => {
     const questionText =
-      perSubmission?.get(ev.question_id) ?? `Question ${ev.question_id}`
+      questionLookup.get(row.submission_id)?.get(row.question_id) ?? `Question ${row.question_id}`
 
     return {
-      id: ev.id,
-      submission_id: ev.submission_id,
-      question_id: ev.question_id,
-      judge_id: ev.judge_id,
-      judge_name: judgeName,
+      id: row.id,
+      submission_id: row.submission_id,
+      question_id: row.question_id,
+      judge_id: row.judge_id,
+      judge_name: row.judges?.name ?? 'Unknown judge',
       question_text: questionText,
-      verdict: ev.verdict,
-      reasoning: ev.reasoning,
-      error: ev.error,
-      created_at: ev.created_at,
+      verdict: normalizeVerdict(row.verdict),
+      reasoning: typeof row.reasoning === 'string' ? row.reasoning : '',
+      error: row.error,
+      created_at: row.created_at,
     }
   })
 }

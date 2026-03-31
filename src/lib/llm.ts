@@ -2,25 +2,22 @@ import Anthropic from '@anthropic-ai/sdk'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import OpenAI from 'openai'
 import type { Judge, Verdict } from '../types'
+import { normalizeVerdict } from './utils'
 
 type LLMResult = {
   verdict: Verdict
   reasoning: string
 }
 
-function buildUserPrompt(questionText: string, answer: unknown): string {
-  return `Question: ${questionText}\nAnswer: ${JSON.stringify(answer)}\n\nRespond with ONLY a JSON object: {"verdict": "pass"|"fail"|"inconclusive", "reasoning": "..."}`
-}
-
-function normalizeVerdict(value: unknown): Verdict {
-  return value === 'pass' || value === 'fail' || value === 'inconclusive' ? value : 'inconclusive'
+function buildUserPrompt(questionText: string, questionType: string, answer: unknown): string {
+  return `Question: ${questionText}\nQuestion Type: ${questionType}\nAnswer: ${JSON.stringify(answer)}\n\nRespond with ONLY a JSON object: {"verdict": "pass"|"fail"|"inconclusive", "reasoning": "..."}`
 }
 
 function parseLlmJson(text: string): LLMResult {
   try {
     const direct = JSON.parse(text) as { verdict?: unknown; reasoning?: unknown }
     return {
-      verdict: normalizeVerdict(direct.verdict),
+      verdict: normalizeVerdict(typeof direct.verdict === 'string' ? direct.verdict : ''),
       reasoning: typeof direct.reasoning === 'string' ? direct.reasoning : 'Failed to parse reasoning.',
     }
   } catch {
@@ -32,7 +29,7 @@ function parseLlmJson(text: string): LLMResult {
     try {
       const parsed = JSON.parse(match[0]) as { verdict?: unknown; reasoning?: unknown }
       return {
-        verdict: normalizeVerdict(parsed.verdict),
+        verdict: normalizeVerdict(typeof parsed.verdict === 'string' ? parsed.verdict : ''),
         reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : 'Model output missing reasoning.',
       }
     } catch {
@@ -93,9 +90,10 @@ async function callGemini(judge: Judge, userPrompt: string): Promise<string> {
 export async function callLLM(
   judge: Judge,
   questionText: string,
+  questionType: string,
   answer: unknown,
 ): Promise<{ verdict: Verdict; reasoning: string }> {
-  const prompt = buildUserPrompt(questionText, answer)
+  const prompt = buildUserPrompt(questionText, questionType, answer)
 
   let rawOutput = ''
   if (judge.model_name.startsWith('gpt-')) {

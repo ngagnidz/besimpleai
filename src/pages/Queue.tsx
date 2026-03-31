@@ -7,6 +7,21 @@ import { listSubmissionsByQueue } from '../lib/submissions'
 import type { Judge, JsonValue, QuestionJudgeAssignment, Submission } from '../types'
 import type { RunSummary } from '../lib/runner'
 
+function groupAssignmentsByQuestion(rows: QuestionJudgeAssignment[]): Record<string, Set<string>> {
+  const out: Record<string, Set<string>> = {}
+  for (const row of rows) {
+    if (!out[row.question_id]) {
+      out[row.question_id] = new Set<string>()
+    }
+    out[row.question_id].add(row.judge_id)
+  }
+  return out
+}
+
+function hasAnyAssignments(map: Record<string, Set<string>>): boolean {
+  return Object.values(map).some((set) => set.size > 0)
+}
+
 type SubmissionQuestion = {
   id: string
   questionText: string
@@ -49,7 +64,9 @@ function Queue() {
   const { queueId } = useParams<{ queueId: string }>()
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [judges, setJudges] = useState<Judge[]>([])
-  const [assignments, setAssignments] = useState<QuestionJudgeAssignment[]>([])
+  const [assignmentByQuestion, setAssignmentByQuestion] = useState<Record<string, Set<string>>>(
+    () => ({}),
+  )
   const [isLoading, setIsLoading] = useState(true)
   const [isSavingAssignment, setIsSavingAssignment] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
@@ -57,9 +74,10 @@ function Queue() {
   const [summary, setSummary] = useState<RunSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const assignmentSet = useMemo(() => {
-    return new Set(assignments.map((item) => `${item.question_id}::${item.judge_id}`))
-  }, [assignments])
+  const runButtonDisabled = useMemo(
+    () => !hasAnyAssignments(assignmentByQuestion),
+    [assignmentByQuestion],
+  )
 
   const loadData = useCallback(async () => {
     if (!queueId) return
@@ -76,7 +94,7 @@ function Queue() {
 
       setSubmissions(submissionRows)
       setJudges(activeJudges)
-      setAssignments(assignmentRows)
+      setAssignmentByQuestion(groupAssignmentsByQuestion(assignmentRows))
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to load queue data.')
     } finally {
@@ -96,20 +114,28 @@ function Queue() {
 
       try {
         if (shouldAssign) {
-          const created = await addAssignment(queueId, questionId, judgeId)
-          setAssignments((previous) => {
-            const exists = previous.some(
-              (item) => item.question_id === questionId && item.judge_id === judgeId,
-            )
-            return exists ? previous : [...previous, created]
+          await addAssignment(queueId, questionId, judgeId)
+          setAssignmentByQuestion((previous) => {
+            const next = { ...previous }
+            const set = new Set(next[questionId] ?? [])
+            set.add(judgeId)
+            next[questionId] = set
+            return next
           })
         } else {
           await removeAssignment(queueId, questionId, judgeId)
-          setAssignments((previous) =>
-            previous.filter(
-              (item) => !(item.question_id === questionId && item.judge_id === judgeId),
-            ),
-          )
+          setAssignmentByQuestion((previous) => {
+            const next = { ...previous }
+            const set = new Set(next[questionId] ?? [])
+            set.delete(judgeId)
+            if (set.size === 0) {
+              const copy = { ...next }
+              delete copy[questionId]
+              return copy
+            }
+            next[questionId] = set
+            return next
+          })
         }
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : 'Failed to save assignment.')
@@ -130,7 +156,7 @@ function Queue() {
 
     try {
       const finalSummary = await runQueue(queueId, {
-        onProgress: (value) => {
+        onProgress: (value: RunSummary) => {
           setProgress(value)
         },
       })
@@ -158,7 +184,7 @@ function Queue() {
         <h1 className="text-2xl font-semibold text-slate-900">Queue: {queueId}</h1>
         <button
           type="button"
-          disabled={isRunning || assignmentSet.size === 0}
+          disabled={isRunning || runButtonDisabled}
           onClick={() => void onRun()}
           className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
@@ -216,12 +242,12 @@ function Queue() {
 
                       <div className="mt-3 flex flex-wrap gap-3">
                         {judges.map((judge) => {
-                          const key = `${question.id}::${judge.id}`
-                          const checked = assignmentSet.has(key)
+                          const checked =
+                            assignmentByQuestion[question.id]?.has(judge.id) ?? false
 
                           return (
                             <label
-                              key={judge.id}
+                              key={`${submission.id}-${question.id}-${judge.id}`}
                               className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
                             >
                               <input

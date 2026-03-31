@@ -4,11 +4,13 @@ import { listActiveJudges } from './judges'
 import { callLLM } from './llm'
 import { listSubmissionsByQueue } from './submissions'
 import { supabase } from './supabase'
-import type { Judge, JsonValue, Submission, Verdict } from '../types'
+import { isRecord } from './utils'
+import type { JsonValue, Judge, Submission, Verdict } from '../types'
 
 type QueueQuestion = {
   id: string
   questionText: string
+  questionType: string
 }
 
 type QueueTask = {
@@ -28,10 +30,6 @@ type RunOptions = {
   onProgress?: (summary: RunSummary) => void
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
 function extractQuestions(value: JsonValue): QueueQuestion[] {
   if (!Array.isArray(value)) return []
 
@@ -42,9 +40,15 @@ function extractQuestions(value: JsonValue): QueueQuestion[] {
 
     const id = data.id
     const questionText = data.questionText
-    if (typeof id !== 'string' || typeof questionText !== 'string') return []
+    const questionType = data.questionType
+    if (
+      typeof id !== 'string' ||
+      typeof questionText !== 'string' ||
+      typeof questionType !== 'string'
+    )
+      return []
 
-    return [{ id, questionText }]
+    return [{ id, questionText, questionType }]
   })
 }
 
@@ -106,15 +110,23 @@ export async function runQueue(queueId: string, options: RunOptions = {}): Promi
     })
   })
 
-  const summary: RunSummary = { planned: tasks.length, completed: 0, failed: 0 }
-  options.onProgress?.(summary)
+  const planned = tasks.length
+  let runningCompleted = 0
+  let runningFailed = 0
+  options.onProgress?.({ planned, completed: 0, failed: 0 })
 
   const limit = pLimit(3)
-  await Promise.all(
+  const results = await Promise.all(
     tasks.map((task) =>
-      limit(async () => {
+      limit(async (): Promise<'completed' | 'failed'> => {
+        let outcome: 'completed' | 'failed'
         try {
-          const result = await callLLM(task.judge, task.question.questionText, task.answer)
+          const result = await callLLM(
+            task.judge,
+            task.question.questionText,
+            task.question.questionType,
+            task.answer,
+          )
           await upsertEvaluation({
             submission_id: task.submission.id,
             question_id: task.question.id,
@@ -123,7 +135,8 @@ export async function runQueue(queueId: string, options: RunOptions = {}): Promi
             reasoning: result.reasoning,
             error: null,
           })
-          summary.completed += 1
+          runningCompleted += 1
+          outcome = 'completed'
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error'
           await upsertEvaluation({
@@ -134,13 +147,16 @@ export async function runQueue(queueId: string, options: RunOptions = {}): Promi
             reasoning: '',
             error: message,
           })
-          summary.failed += 1
-        } finally {
-          options.onProgress?.({ ...summary })
+          runningFailed += 1
+          outcome = 'failed'
         }
+        options.onProgress?.({ planned, completed: runningCompleted, failed: runningFailed })
+        return outcome
       }),
     ),
   )
 
-  return summary
+  const completed = results.filter((r) => r === 'completed').length
+  const failed = results.filter((r) => r === 'failed').length
+  return { planned, completed, failed }
 }
