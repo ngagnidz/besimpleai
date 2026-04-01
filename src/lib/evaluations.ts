@@ -10,7 +10,9 @@ export type InsertEvaluationInput = {
 }
 
 export async function insertEvaluation(row: InsertEvaluationInput): Promise<void> {
-  const { error } = await supabase.from('evaluations').insert(row)
+  const { error } = await supabase
+    .from('evaluations')
+    .upsert(row, { onConflict: 'submission_id,question_id,judge_id' })
   if (error) {
     throw new Error(error.message)
   }

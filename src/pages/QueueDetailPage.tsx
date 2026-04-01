@@ -33,8 +33,9 @@ function QueueDetailPage() {
       await runEvaluations(queueId, setProgress)
     } finally {
       setIsRunning(false)
+      await queryClient.invalidateQueries({ queryKey: ['evaluations', queueId] })
     }
-  }, [queueId])
+  }, [queueId, queryClient])
 
   const questionsQuery = useQuery({
     queryKey: ['questions', queueId],
@@ -127,14 +128,16 @@ function QueueDetailPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
-      <QueueDetailTopBar
-        canRunAiJudges={canRunAiJudges}
-        onRun={handleRun}
-        isRunning={isRunning}
-        progress={progress}
-      />
+      <div className="animate-queues-panel-in">
+        <QueueDetailTopBar
+          canRunAiJudges={canRunAiJudges}
+          onRun={handleRun}
+          isRunning={isRunning}
+          progress={progress}
+        />
+      </div>
 
-      <header>
+      <header className="animate-queues-panel-in">
         <h1 className="font-mono text-2xl font-semibold tracking-tight text-slate-900">{queueId}</h1>
       </header>
 
@@ -148,6 +151,7 @@ function QueueDetailPage() {
         <QueueDetailSkeleton rows={5} />
       ) : (
         <QueueQuestionsTable
+          key={queueId}
           questions={questions}
           judges={judges}
           assignments={assignments}

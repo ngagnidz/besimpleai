@@ -50,16 +50,41 @@ async function callOpenAI(
   return parseVerdict(text)
 }
 
-function parseVerdict(text: string): LLMResult {
-  try {
-    const parsed = JSON.parse(text)
-    const verdict = parsed.verdict
-    const reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : text
-    if (verdict === 'pass' || verdict === 'fail' || verdict === 'inconclusive') {
-      return { verdict, reasoning }
+/** If the model wraps JSON in a markdown fence, extract the inner payload for JSON.parse. */
+function unwrapMarkdownJsonFence(text: string): string {
+  const t = text.trim()
+  const full = t.match(/^```(?:json)?\s*\r?\n?([\s\S]*?)\r?\n?```\s*$/i)
+  if (full) return full[1].trim()
+  const block = t.match(/```(?:json)?\s*\r?\n([\s\S]*?)\r?\n```/i)
+  if (block) return block[1].trim()
+  return t
+}
+
+function tryParseVerdictFromJson(text: string): LLMResult | null {
+  const trimmed = text.trim()
+  const unwrapped = unwrapMarkdownJsonFence(text)
+  const candidates = unwrapped === trimmed ? [trimmed] : [trimmed, unwrapped]
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate)
+      const verdict = parsed.verdict
+      const reasoning =
+        typeof parsed.reasoning === 'string' ? parsed.reasoning : candidate
+      if (verdict === 'pass' || verdict === 'fail' || verdict === 'inconclusive') {
+        return { verdict, reasoning }
+      }
+    } catch {
+      /* try next candidate or fall through */
     }
-  } catch {
-    // not JSON, fall through to keyword search
+  }
+  return null
+}
+
+function parseVerdict(text: string): LLMResult {
+  const fromJson = tryParseVerdictFromJson(text)
+  if (fromJson) {
+    return fromJson
   }
 
   const lower = text.toLowerCase()

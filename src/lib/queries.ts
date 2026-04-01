@@ -2,7 +2,7 @@
  * Read-only Supabase fetch helpers for the UI (TanStack Query `queryFn`s).
  * Throws `Error` with the PostgREST message on failure.
  */
-import type { Answer, Judge, JudgeAssignment, Question, Submission } from '../types'
+import type { Answer, Evaluation, Judge, JudgeAssignment, Question, Submission } from '../types'
 import { supabase } from './supabase'
 
 /** One row in the queue list: id plus denormalized counts for the cards. */
@@ -147,5 +147,28 @@ export async function fetchAnswersForSubmissions(submissionIds: string[]): Promi
   }
 
   return (data ?? []) as Answer[]
+}
+
+/**
+ * Evaluations for a queue (via submissions belonging to that queue). Newest first.
+ */
+export async function fetchEvaluationsForQueue(queueId: string): Promise<Evaluation[]> {
+  const submissions = await fetchSubmissionsForQueue(queueId)
+  const submissionIds = submissions.map((s) => s.id)
+  if (submissionIds.length === 0) {
+    return []
+  }
+
+  const { data, error } = await supabase
+    .from('evaluations')
+    .select('id, submission_id, question_id, judge_id, verdict, reasoning, created_at')
+    .in('submission_id', submissionIds)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return (data ?? []) as Evaluation[]
 }
 

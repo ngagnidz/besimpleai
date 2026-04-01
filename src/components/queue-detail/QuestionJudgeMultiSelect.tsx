@@ -29,7 +29,7 @@ export function QuestionJudgeMultiSelect({
   if (judges.length === 0) {
     return (
       <p className="text-left text-sm text-amber-800">
-        No judges yet — create one on the{' '}
+        No active judges yet — create one on the{' '}
         <Link to="/judges" className="font-medium text-indigo-600 underline hover:text-indigo-700">
           Judges
         </Link>{' '}
