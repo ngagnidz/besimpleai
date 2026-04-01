@@ -130,6 +130,7 @@ function QueueDetailPage() {
     <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
       <div className="animate-queues-panel-in">
         <QueueDetailTopBar
+          queueId={queueId}
           canRunAiJudges={canRunAiJudges}
           onRun={handleRun}
           isRunning={isRunning}

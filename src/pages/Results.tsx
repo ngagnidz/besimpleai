@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { QueueListSkeleton } from '../components/queues/QueueListSkeleton'
 import { ResultsTable } from '../components/results/ResultsTable'
 import { ResultsTableSkeleton } from '../components/results/ResultsTableSkeleton'
@@ -12,6 +12,9 @@ import {
 } from '../lib/queries'
 
 function Results() {
+  const [searchParams] = useSearchParams()
+  const queueFromUrl = searchParams.get('queue') ?? ''
+
   const [selectedQueueId, setSelectedQueueId] = useState('')
 
   const summariesQuery = useQuery({
@@ -24,10 +27,13 @@ function Results() {
     const rows = summariesQuery.data
     if (!rows?.length) return
     setSelectedQueueId((prev) => {
+      if (queueFromUrl && rows.some((r) => r.id === queueFromUrl)) {
+        return queueFromUrl
+      }
       if (prev && rows.some((r) => r.id === prev)) return prev
       return rows[0].id
     })
-  }, [summariesQuery.data])
+  }, [summariesQuery.data, queueFromUrl])
 
   const evaluationsQuery = useQuery({
     queryKey: ['evaluations', selectedQueueId],
