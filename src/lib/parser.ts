@@ -94,7 +94,7 @@ function parseQuestionEntry(
     )
   }
   /** Stable PK per queue so upserts never collide when two queues reuse the same template id. */
-  const id = `${queueId}::${templateId}`
+  const id = `${queueId}::${templateId}::${rev}`
   return {
     id,
     queue_id: queueId,
@@ -111,8 +111,8 @@ function parseQuestionEntry(
  * Required per item: `id`, `queueId`, `questions`, `answers`.
  * Optional: `labelingTaskId` / `labeling_task_id`, `createdAt` / `created_at` (defaults applied).
  *
- * Question row `id` is `${queueId}::${templateId}` so PKs are unique across queues; templates are
- * deduped so repeated definitions collapse to one row per queue+template.
+ * Question row `id` is `${queueId}::${templateId}::${rev}`. Answer `question_id` matches that shape
+ * using the submission’s template rev map.
  *
  * @throws Descriptive `Error` messages for invalid structure or types (includes array indices).
  */
@@ -170,9 +170,11 @@ export function parseSubmissions(raw: unknown): ParsedData {
 
     queueIds.add(queueId)
 
+    const submissionTemplateRevs = new Map<string, number>()
     for (let q = 0; q < questionsRaw.length; q += 1) {
       const qRow = parseQuestionEntry(questionsRaw[q], i, q, queueId)
       questionByKey.set(qRow.id, qRow)
+      submissionTemplateRevs.set(qRow.id.split('::')[1], qRow.rev)
     }
 
     submissions.push({
@@ -186,7 +188,7 @@ export function parseSubmissions(raw: unknown): ParsedData {
       answers.push({
         id: crypto.randomUUID(),
         submission_id: id,
-        question_id: `${queueId}::${templateQuestionId}`,
+        question_id: `${queueId}::${templateQuestionId}::${submissionTemplateRevs.get(templateQuestionId) ?? 1}`,
         answer_json: answerValue,
       })
     }
