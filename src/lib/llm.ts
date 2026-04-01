@@ -7,6 +7,23 @@ export type LLMResult = {
   reasoning: string
 }
 
+/** One-line guidance for the user message so judges interpret `answer_json` shape correctly (ingest may use other strings—those get no extra line). */
+const QUESTION_TYPE_USER_HINTS: Record<string, string> = {
+  multiple_choice:
+    'Note: Multiple-choice question; the answer is usually an array of selected options—judge whether those selections meet the rubric.',
+  free_form:
+    'Note: Free-form answer; evaluate content quality and correctness against the question, not a fixed option list.',
+  single_choice_with_reasoning:
+    'Note: Single-choice with reasoning; evaluate both the chosen option and the reasoning text.',
+  single_choice:
+    'Note: Single-choice question; the answer should reflect one selected option—judge correctness against the rubric.',
+}
+
+function questionTypeUserHint(questionType: string): string {
+  const key = questionType.trim()
+  return QUESTION_TYPE_USER_HINTS[key] ?? ''
+}
+
 /**
  * Runs `fn` up to `retries` times. On rate-limit-style errors (message contains `429` or “rate limit”),
  * waits with exponential backoff (1s, 2s, 4s, …) before retrying; other errors rethrow immediately.
@@ -27,7 +44,7 @@ async function callWithRetry(fn: () => Promise<LLMResult>, retries = 3): Promise
 }
 
 /**
- * Sends the judge’s `system_prompt` (plus fixed JSON-instruction suffix), question type, question text, and answer text to the configured provider and returns a parsed verdict.
+ * Sends the judge’s `system_prompt` (plus fixed JSON-instruction suffix), question type (with optional format hint), question text, and answer text to the configured provider and returns a parsed verdict.
  * Rate-limited responses are retried with backoff before surfacing as errors to the caller.
  *
  * @throws Error if `judge.provider` is not supported
@@ -43,7 +60,11 @@ export async function callLLM(
     judge.system_prompt +
     `\n\nRespond only with valid JSON, no other text:\n{"verdict": "pass" | "fail" | "inconclusive", "reasoning": "<one sentence>"}`
 
-  const userMessage = `Question type: ${questionType}\n\nQuestion: ${questionText}\n\nAnswer: ${answerText}`
+  const typeHint = questionTypeUserHint(questionType)
+  const userMessage =
+    `Question type: ${questionType}\n\n` +
+    (typeHint ? `${typeHint}\n\n` : '') +
+    `Question: ${questionText}\n\nAnswer: ${answerText}`
 
   return callWithRetry(() => {
     switch (judge.provider) {
