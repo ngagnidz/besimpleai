@@ -1,9 +1,19 @@
+/**
+ * Small type guards shared by the parser and other modules.
+ */
 import type { JsonValue } from '../types'
 
+/**
+ * True for any non-null object (including arrays — in JS `typeof [] === 'object'`).
+ * Use alongside `Array.isArray` when you need “plain object only”.
+ */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+/**
+ * True when `value` matches our recursive `JsonValue` shape (JSON-serializable tree).
+ */
 export function isJsonValue(value: unknown): value is JsonValue {
   if (
     value === null ||

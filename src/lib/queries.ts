@@ -1,11 +1,20 @@
+/**
+ * Read-only Supabase fetch helpers for the UI (TanStack Query `queryFn`s).
+ * Throws `Error` with the PostgREST message on failure.
+ */
 import { supabase } from './supabase'
 
+/** One row in the queue list: id plus denormalized counts for the cards. */
 export type QueueSummary = {
   id: string
   submissionsCount: number
   questionsCount: number
 }
 
+/**
+ * Loads all queues (ordered by id) and, per queue, exact counts from `submissions` and `questions`.
+ * Uses `count` + `head` requests — no full row payloads.
+ */
 export async function fetchQueueSummaries(): Promise<QueueSummary[]> {
   const { data: queues, error } = await supabase.from('queues').select('id').order('id', { ascending: true })
   if (error) {
@@ -39,7 +48,9 @@ export async function fetchQueueSummaries(): Promise<QueueSummary[]> {
   return queueSummaries
 }
 
-/** Single count for the queue detail header — avoids N+1 answer queries per submission. */
+/**
+ * Submission count for one queue (e.g. queue detail header). Single aggregate query, not per-row.
+ */
 export async function fetchSubmissionCountForQueue(queueId: string): Promise<number> {
   const { count, error } = await supabase
     .from('submissions')
