@@ -14,6 +14,9 @@ function Navbar() {
           <NavLink to="/upload" className={linkClass} end>
             Upload
           </NavLink>
+          <NavLink to="/queues" className={linkClass}>
+            Queues
+          </NavLink>
           <NavLink to="/judges" className={linkClass}>
             Judges
           </NavLink>
