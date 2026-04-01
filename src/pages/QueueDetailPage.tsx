@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { QueueDetailSkeleton } from '../components/queue-detail/QueueDetailSkeleton'
 import { QueueDetailTopBar } from '../components/queue-detail/QueueDetailTopBar'
 import { QueueQuestionsTable } from '../components/queue-detail/QueueQuestionsTable'
 import { assignJudge, unassignJudge } from '../lib/assignments'
+import { runEvaluations, type RunProgress } from '../lib/runner'
 import {
   fetchActiveJudges,
   fetchJudgeAssignmentsForQueue,
@@ -20,6 +21,20 @@ function QueueDetailPage() {
   const queryClient = useQueryClient()
   const { queueId: queueIdParam } = useParams<{ queueId: string }>()
   const queueId = queueIdParam ? decodeURIComponent(queueIdParam) : ''
+
+  const [isRunning, setIsRunning] = useState(false)
+  const [progress, setProgress] = useState<RunProgress | null>(null)
+
+  const handleRun = useCallback(async () => {
+    if (!queueId) return
+    setProgress(null)
+    setIsRunning(true)
+    try {
+      await runEvaluations(queueId, setProgress)
+    } finally {
+      setIsRunning(false)
+    }
+  }, [queueId])
 
   const questionsQuery = useQuery({
     queryKey: ['questions', queueId],
@@ -112,7 +127,12 @@ function QueueDetailPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
-      <QueueDetailTopBar canRunAiJudges={canRunAiJudges} />
+      <QueueDetailTopBar
+        canRunAiJudges={canRunAiJudges}
+        onRun={handleRun}
+        isRunning={isRunning}
+        progress={progress}
+      />
 
       <header>
         <h1 className="font-mono text-2xl font-semibold tracking-tight text-slate-900">{queueId}</h1>

@@ -54,14 +54,20 @@ function parseVerdict(text: string): LLMResult {
   try {
     const parsed = JSON.parse(text)
     const verdict = parsed.verdict
-    const reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : ''
+    const reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : text
     if (verdict === 'pass' || verdict === 'fail' || verdict === 'inconclusive') {
       return { verdict, reasoning }
     }
-    return { verdict: 'inconclusive', reasoning: 'Could not determine verdict from response.' }
   } catch {
-    return { verdict: 'inconclusive', reasoning: 'Failed to parse LLM response.' }
+    // not JSON, fall through to keyword search
   }
+
+  const lower = text.toLowerCase()
+  if (lower.includes('pass')) return { verdict: 'pass', reasoning: text }
+  if (lower.includes('fail')) return { verdict: 'fail', reasoning: text }
+  if (lower.includes('inconclusive')) return { verdict: 'inconclusive', reasoning: text }
+
+  return { verdict: 'inconclusive', reasoning: 'Could not determine verdict from response.' }
 }
 
 async function callAnthropic(
