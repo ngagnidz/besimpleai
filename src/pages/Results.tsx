@@ -1,21 +1,26 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { QueueListSkeleton } from '../components/queues/QueueListSkeleton'
 import { ResultsTable } from '../components/results/ResultsTable'
 import { ResultsTableSkeleton } from '../components/results/ResultsTableSkeleton'
 import {
-  fetchEvaluationsForQueue,
+  fetchEvaluationsForQueues,
   fetchJudges,
-  fetchQuestionsByQueueId,
+  fetchQuestionsByQueueIds,
   fetchQueueSummaries,
 } from '../lib/queries'
 
-function Results() {
-  const [searchParams] = useSearchParams()
-  const queueFromUrl = searchParams.get('queue') ?? ''
+function sameIdSetUnordered(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  const sb = new Set(b)
+  return a.every((id) => sb.has(id))
+}
 
-  const [selectedQueueId, setSelectedQueueId] = useState('')
+function Results() {
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const [selectedQueueIds, setSelectedQueueIds] = useState<string[]>([])
 
   const summariesQuery = useQuery({
     queryKey: ['queues', 'summaries'],
@@ -26,26 +31,52 @@ function Results() {
   useEffect(() => {
     const rows = summariesQuery.data
     if (!rows?.length) return
-    setSelectedQueueId((prev) => {
-      if (queueFromUrl && rows.some((r) => r.id === queueFromUrl)) {
-        return queueFromUrl
+    const valid = new Set(rows.map((r) => r.id))
+    const fromUrl = [
+      ...new Set(searchParams.getAll('queue').filter((id) => valid.has(id))),
+    ]
+
+    setSelectedQueueIds((prev) => {
+      if (fromUrl.length > 0) {
+        return sameIdSetUnordered(prev, fromUrl) ? prev : [...fromUrl]
       }
-      if (prev && rows.some((r) => r.id === prev)) return prev
-      return rows[0].id
+      const kept = prev.filter((id) => valid.has(id))
+      if (kept.length > 0) return kept
+      return [rows[0].id]
     })
-  }, [summariesQuery.data, queueFromUrl])
+  }, [summariesQuery.data, searchParams])
+
+  const setQueuesInUrl = useCallback(
+    (ids: string[]) => {
+      const params = new URLSearchParams()
+      ids.forEach((id) => params.append('queue', id))
+      setSearchParams(params, { replace: true })
+    },
+    [setSearchParams],
+  )
+
+  const setSelectedQueues = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return
+      setSelectedQueueIds(ids)
+      setQueuesInUrl(ids)
+    },
+    [setQueuesInUrl],
+  )
+
+  const queuesKey = useMemo(() => [...selectedQueueIds].sort().join('|'), [selectedQueueIds])
 
   const evaluationsQuery = useQuery({
-    queryKey: ['evaluations', selectedQueueId],
-    queryFn: () => fetchEvaluationsForQueue(selectedQueueId),
-    enabled: selectedQueueId.length > 0,
+    queryKey: ['evaluations', 'multi', queuesKey],
+    queryFn: () => fetchEvaluationsForQueues(selectedQueueIds),
+    enabled: selectedQueueIds.length > 0,
     retry: 1,
   })
 
   const questionsQuery = useQuery({
-    queryKey: ['questions', selectedQueueId],
-    queryFn: () => fetchQuestionsByQueueId(selectedQueueId),
-    enabled: selectedQueueId.length > 0,
+    queryKey: ['questions', 'multi', queuesKey],
+    queryFn: () => fetchQuestionsByQueueIds(selectedQueueIds),
+    enabled: selectedQueueIds.length > 0,
     retry: 1,
   })
 
@@ -59,7 +90,7 @@ function Results() {
   const summariesError = summariesQuery.isError
 
   const detailLoading =
-    selectedQueueId.length > 0 &&
+    selectedQueueIds.length > 0 &&
     (evaluationsQuery.isLoading || questionsQuery.isLoading || judgesQuery.isLoading)
 
   const detailError =
@@ -78,15 +109,15 @@ function Results() {
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-gradient-to-b from-slate-50/70 via-white to-indigo-50/15">
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-8">
-        <header className="animate-queues-panel-in max-w-3xl space-y-1 pr-4">
+      <div className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col px-4 py-8 sm:px-6">
+        <header className="animate-queues-panel-in max-w-2xl space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-[1.65rem]">Results</h1>
           <p className="text-sm leading-relaxed text-slate-600">
-            Evaluation history from AI judges, grouped by queue. Newest rows appear first.
+            Select one or more queues, then narrow by judge, question, or verdict. Newest evaluations first.
           </p>
         </header>
 
-        <div className="mt-8 flex-1 space-y-6 pb-16">
+        <div className="mt-8 flex-1 space-y-4 pb-16">
           {summariesLoading ? (
             <div className="max-w-3xl">
               <QueueListSkeleton rows={3} />
@@ -100,7 +131,7 @@ function Results() {
           ) : null}
 
           {showQueueEmpty ? (
-            <div className="max-w-xl rounded-xl border border-dashed border-slate-300/60 bg-white/60 px-6 py-12 text-center backdrop-blur-sm">
+            <div className="max-w-xl rounded-xl border border-dashed border-slate-300/60 bg-white/70 px-6 py-12 text-center backdrop-blur-sm">
               <p className="text-sm font-medium text-slate-800">No queues yet</p>
               <p className="mt-1.5 text-sm text-slate-600">
                 Upload data and run judges from a queue to see results here.
@@ -110,34 +141,6 @@ function Results() {
 
           {!summariesLoading && !summariesError && queues.length > 0 ? (
             <>
-              <div className="animate-queues-panel-in flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <label htmlFor="results-queue" className="block text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Queue
-                  </label>
-                  <select
-                    id="results-queue"
-                    value={selectedQueueId}
-                    onChange={(e) => setSelectedQueueId(e.target.value)}
-                    className="mt-1.5 w-full max-w-xl rounded-lg border border-slate-200 bg-white px-3 py-2.5 font-mono text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  >
-                    {queues.map((q) => (
-                      <option key={q.id} value={q.id}>
-                        {q.id}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {selectedQueueId ? (
-                  <Link
-                    to={`/queues/${encodeURIComponent(selectedQueueId)}`}
-                    className="shrink-0 text-sm font-medium text-indigo-600 hover:text-indigo-700"
-                  >
-                    Open queue →
-                  </Link>
-                ) : null}
-              </div>
-
               {detailError ? (
                 <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                   {detailError}
@@ -146,9 +149,11 @@ function Results() {
 
               {detailLoading ? <ResultsTableSkeleton rows={7} /> : null}
 
-              {!detailLoading && !detailError && selectedQueueId ? (
+              {!detailLoading && !detailError && selectedQueueIds.length > 0 ? (
                 <ResultsTable
-                  key={selectedQueueId}
+                  queues={queues}
+                  selectedQueueIds={selectedQueueIds}
+                  onQueueSelectionChange={setSelectedQueues}
                   evaluations={evaluationsQuery.data ?? []}
                   questions={questionsQuery.data ?? []}
                   judges={judgesQuery.data ?? []}

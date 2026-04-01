@@ -172,3 +172,25 @@ export async function fetchEvaluationsForQueue(queueId: string): Promise<Evaluat
   return (data ?? []) as Evaluation[]
 }
 
+/** Merged evaluations for several queues, newest first (by `created_at`). */
+export async function fetchEvaluationsForQueues(queueIds: string[]): Promise<Evaluation[]> {
+  if (queueIds.length === 0) {
+    return []
+  }
+  const chunks = await Promise.all(queueIds.map((id) => fetchEvaluationsForQueue(id)))
+  const merged = chunks.flat()
+  merged.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  )
+  return merged
+}
+
+/** All questions for the given queues (order not guaranteed; sort in UI if needed). */
+export async function fetchQuestionsByQueueIds(queueIds: string[]): Promise<Question[]> {
+  if (queueIds.length === 0) {
+    return []
+  }
+  const chunks = await Promise.all(queueIds.map((id) => fetchQuestionsByQueueId(id)))
+  return chunks.flat()
+}
+
