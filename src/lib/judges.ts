@@ -1,4 +1,4 @@
-/** Supabase helpers for `judges` (LLM configurations). Written from `Judges`; read by `fetchJudges` / `fetchActiveJudges` in `queries.ts`. `deleteJudge` clears `judge_assignments` for that id first. */
+/** Supabase helpers for `judges` (LLM configurations). Written from `Judges`; read by `fetchJudges` / `fetchActiveJudges` in `queries.ts`. */
 import type { JudgeProvider } from '../types'
 import { supabase } from './supabase'
 
@@ -43,19 +43,5 @@ export async function saveJudge(input: SaveJudgeInput): Promise<void> {
  */
 export async function setJudgeActive(judgeId: string, active: boolean): Promise<void> {
   const { error } = await supabase.from('judges').update({ active }).eq('id', judgeId)
-  if (error) throw new Error(error.message)
-}
-
-/**
- * Removes all `judge_assignments` for this judge, then deletes the judge row.
- * Existing `evaluations` rows keep their `judge_id` (may show as unknown judge in Results).
- *
- * @throws Error with the PostgREST message if the request fails
- */
-export async function deleteJudge(judgeId: string): Promise<void> {
-  const { error: assignError } = await supabase.from('judge_assignments').delete().eq('judge_id', judgeId)
-  if (assignError) throw new Error(assignError.message)
-
-  const { error } = await supabase.from('judges').delete().eq('id', judgeId)
   if (error) throw new Error(error.message)
 }

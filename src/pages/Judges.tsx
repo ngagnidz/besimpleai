@@ -4,7 +4,7 @@ import { JudgeCard } from '../components/judges/JudgeCard'
 import { JudgeFormPanel, type JudgeFormSubmitValues } from '../components/judges/JudgeFormPanel'
 import { JudgesListSkeleton } from '../components/judges/JudgesListSkeleton'
 import type { Judge } from '../types'
-import { deleteJudge, saveJudge, setJudgeActive } from '../lib/judges'
+import { saveJudge, setJudgeActive } from '../lib/judges'
 import { fetchJudges } from '../lib/queries'
 
 const JUDGES_QUERY_KEY = ['judges'] as const
@@ -24,33 +24,6 @@ function Judges() {
     mutationFn: (input: JudgeFormSubmitValues) => saveJudge(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: JUDGES_QUERY_KEY }),
   })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteJudge(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: JUDGES_QUERY_KEY })
-      queryClient.invalidateQueries({ queryKey: ['judges', 'active'] })
-      queryClient.invalidateQueries({ queryKey: ['judge_assignments'] })
-    },
-    onError: (err) => {
-      window.alert(err instanceof Error ? err.message : 'Failed to remove judge.')
-    },
-  })
-
-  const removeJudge = useCallback(
-    (judge: Judge) => {
-      const ok = window.confirm(
-        `Remove judge “${judge.name}”? This deletes the judge and all queue assignments for them. Past evaluations stay in results but may show without a judge name.`,
-      )
-      if (!ok) return
-      if (editingJudge?.id === judge.id) {
-        setPanelOpen(false)
-        setEditingJudge(null)
-      }
-      deleteMutation.mutate(judge.id)
-    },
-    [editingJudge, deleteMutation],
-  )
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) => setJudgeActive(id, active),
@@ -128,9 +101,7 @@ function Judges() {
                   judge={judge}
                   onEdit={openEdit}
                   onToggleActive={(j) => toggleMutation.mutate({ id: j.id, active: !j.active })}
-                  onRemove={removeJudge}
                   togglePending={toggleMutation.isPending && toggleMutation.variables?.id === judge.id}
-                  removePending={deleteMutation.isPending && deleteMutation.variables === judge.id}
                 />
               ))}
             </div>

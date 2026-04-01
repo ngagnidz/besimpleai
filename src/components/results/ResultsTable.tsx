@@ -205,6 +205,32 @@ function formatEvaluatedAt(iso: string): string {
   })
 }
 
+/** Collapsed to ~4 lines unless expanded; “Read more” when text is likely truncated. */
+function ReasoningCell({ reasoning }: { reasoning: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const likelyTruncates = reasoning.length > 180 || reasoning.split(/\r?\n/).length > 4
+
+  return (
+    <div>
+      <p
+        className={`whitespace-pre-wrap break-words ${expanded ? '' : 'line-clamp-4'}`}
+        title={expanded ? undefined : reasoning}
+      >
+        {reasoning}
+      </p>
+      {likelyTruncates ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+        >
+          {expanded ? 'Read less' : 'Read more'}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 function toggleStringId(list: string[], id: string): string[] {
   return list.includes(id) ? list.filter((x) => x !== id) : [...list, id]
 }
@@ -609,9 +635,7 @@ export function ResultsTable({
                         </span>
                       </td>
                       <td className="max-w-xl px-4 py-3 align-top text-slate-700">
-                        <p className="line-clamp-4 whitespace-pre-wrap break-words" title={row.reasoning}>
-                          {row.reasoning}
-                        </p>
+                        <ReasoningCell reasoning={row.reasoning} />
                       </td>
                     </tr>
                   )

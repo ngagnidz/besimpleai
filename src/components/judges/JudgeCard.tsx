@@ -4,18 +4,14 @@ type JudgeCardProps = {
   judge: Judge
   onEdit: (judge: Judge) => void
   onToggleActive: (judge: Judge) => void
-  onRemove: (judge: Judge) => void
   togglePending: boolean
-  removePending: boolean
 }
 
 export function JudgeCard({
   judge,
   onEdit,
   onToggleActive,
-  onRemove,
   togglePending,
-  removePending,
 }: JudgeCardProps) {
   const providerModel = `${judge.provider} / ${judge.model}`
 
@@ -52,14 +48,6 @@ export function JudgeCard({
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {judge.active ? 'Deactivate' : 'Activate'}
-        </button>
-        <button
-          type="button"
-          disabled={removePending || togglePending}
-          onClick={() => onRemove(judge)}
-          className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Remove
         </button>
       </div>
     </article>
