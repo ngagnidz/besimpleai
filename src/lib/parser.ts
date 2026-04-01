@@ -186,7 +186,7 @@ export function parseSubmissions(raw: unknown): ParsedData {
 
     for (const [templateQuestionId, answerValue] of Object.entries(answersObj)) {
       answers.push({
-        id: crypto.randomUUID(),
+        id: `${id}::${templateQuestionId}`,
         submission_id: id,
         question_id: `${queueId}::${templateQuestionId}::${submissionTemplateRevs.get(templateQuestionId) ?? 1}`,
         answer_json: answerValue,
