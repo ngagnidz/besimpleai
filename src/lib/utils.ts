@@ -1,13 +1,26 @@
-import type { Verdict } from '../types'
+import type { JsonValue } from '../types'
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-export function normalizeVerdict(text: string): Verdict {
-  const lower = text.toLowerCase()
-  if (lower.includes('pass')) return 'pass'
-  if (lower.includes('fail')) return 'fail'
-  if (lower.includes('inconclusive')) return 'inconclusive'
-  return 'inconclusive'
+export function isJsonValue(value: unknown): value is JsonValue {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return true
+  }
+
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue)
+  }
+
+  if (isRecord(value)) {
+    return Object.values(value).every(isJsonValue)
+  }
+
+  return false
 }
