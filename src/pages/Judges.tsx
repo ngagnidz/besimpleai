@@ -4,7 +4,7 @@ import { JudgeCard } from '../components/judges/JudgeCard'
 import { JudgeFormPanel, type JudgeFormSubmitValues } from '../components/judges/JudgeFormPanel'
 import { JudgesListSkeleton } from '../components/judges/JudgesListSkeleton'
 import type { Judge } from '../types'
-import { saveJudge, setJudgeActive } from '../lib/judgesApi'
+import { saveJudge, setJudgeActive } from '../lib/judges'
 import { fetchJudges } from '../lib/queries'
 
 const JUDGES_QUERY_KEY = ['judges'] as const

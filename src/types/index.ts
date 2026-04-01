@@ -45,3 +45,10 @@ export type Judge = {
   active: boolean
   created_at: string
 }
+
+export type JudgeAssignment = {
+  id: string
+  queue_id: string
+  question_id: string
+  judge_id: string
+}
