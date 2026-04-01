@@ -52,3 +52,13 @@ export type JudgeAssignment = {
   question_id: string
   judge_id: string
 }
+
+export type Evaluation = {
+  id: string
+  submission_id: string
+  question_id: string
+  judge_id: string
+  verdict: Verdict
+  reasoning: string
+  created_at: string
+}
