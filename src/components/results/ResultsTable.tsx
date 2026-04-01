@@ -2,6 +2,7 @@ import { useCallback, useId, useMemo, useState, type ReactNode } from 'react'
 import type { QueueSummary } from '../../lib/queries'
 import type { Evaluation, Judge, Question, Verdict } from '../../types'
 import { formatDbLabel } from '../../lib/utils'
+import { ResultsTableMainSkeleton } from './ResultsTableSkeleton'
 
 export type ResultsTableProps = {
   queues: QueueSummary[]
@@ -10,6 +11,8 @@ export type ResultsTableProps = {
   evaluations: Evaluation[]
   questions: Question[]
   judges: Judge[]
+  /** True while evaluations/questions/judges are loading for the current queue selection — table shows skeleton; filter rail stays mounted. */
+  detailLoading?: boolean
 }
 
 const VERDICT_OPTIONS: Verdict[] = ['pass', 'fail', 'inconclusive']
@@ -300,6 +303,7 @@ export function ResultsTable({
   evaluations,
   questions,
   judges,
+  detailLoading = false,
 }: ResultsTableProps) {
   const baseId = useId()
   const [judgeQuery, setJudgeQuery] = useState('')
@@ -535,7 +539,9 @@ export function ResultsTable({
     selectedQueueIds.length === 1 ? 'this queue' : `${selectedQueueIds.length} queues`
 
   const tableSection =
-    evaluations.length === 0 ? (
+    detailLoading && evaluations.length === 0 ? (
+      <ResultsTableMainSkeleton rows={7} />
+    ) : evaluations.length === 0 ? (
       <p className="animate-queues-panel-in rounded-xl border border-dashed border-slate-200 bg-slate-50/90 px-6 py-14 text-center text-sm text-slate-600">
         No evaluations yet for {queuePhrase}. Run AI judges from the{' '}
         <span className="font-medium text-slate-800">queue page</span>.

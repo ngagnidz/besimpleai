@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { QueueListSkeleton } from '../components/queues/QueueListSkeleton'
 import { ResultsTable } from '../components/results/ResultsTable'
-import { ResultsTableSkeleton } from '../components/results/ResultsTableSkeleton'
 import {
   fetchEvaluationsForQueues,
   fetchJudges,
@@ -147,9 +146,7 @@ function Results() {
                 </div>
               ) : null}
 
-              {detailLoading ? <ResultsTableSkeleton rows={7} /> : null}
-
-              {!detailLoading && !detailError && selectedQueueIds.length > 0 ? (
+              {!detailError && selectedQueueIds.length > 0 ? (
                 <ResultsTable
                   queues={queues}
                   selectedQueueIds={selectedQueueIds}
@@ -157,6 +154,7 @@ function Results() {
                   evaluations={evaluationsQuery.data ?? []}
                   questions={questionsQuery.data ?? []}
                   judges={judgesQuery.data ?? []}
+                  detailLoading={detailLoading}
                 />
               ) : null}
             </>
