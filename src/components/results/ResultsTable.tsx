@@ -16,6 +16,7 @@ import {
 import type { QueueSummary } from '../../lib/queries'
 import type { Evaluation, Judge, Question, Verdict } from '../../types'
 import { formatDbLabel } from '../../lib/utils'
+import { JudgePassRateChart } from './JudgePassRateChart'
 import { ResultsTableMainSkeleton } from './ResultsTableSkeleton'
 
 export type ResultsTableProps = {
@@ -623,86 +624,92 @@ export function ResultsTable({
         <span className="font-medium text-slate-800">queue page</span>.
       </p>
     ) : (
-      <div className={mainCardClass}>
-        <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <p className="text-sm font-medium text-slate-800">
-            {passRate === null
-              ? `—% pass of ${filtered.length} evaluations`
-              : `${passRate}% pass of ${filtered.length} evaluations`}
-          </p>
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            disabled={filtered.length === 0}
-            className="shrink-0 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Export CSV
-          </button>
+      <div className="flex flex-col gap-6">
+        <div className={`${mainCardClass} p-5`}>
+          <h2 className="mb-4 text-base font-semibold text-slate-900">Pass rate by judge</h2>
+          <JudgePassRateChart evaluations={filtered} judges={judges} />
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="whitespace-nowrap px-4 py-3 font-medium text-slate-600">When</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium text-slate-600">Submission</th>
-                <th className="min-w-[12rem] px-4 py-3 font-medium text-slate-600">Question</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium text-slate-600">Judge</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium text-slate-600">Verdict</th>
-                <th className="min-w-[16rem] px-4 py-3 font-medium text-slate-600">Reasoning</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-slate-600">
-                    No evaluations match the current filters.
-                  </td>
+        <div className={mainCardClass}>
+          <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <p className="text-sm font-medium text-slate-800">
+              {passRate === null
+                ? `—% pass of ${filtered.length} evaluations`
+                : `${passRate}% pass of ${filtered.length} evaluations`}
+            </p>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={filtered.length === 0}
+              className="shrink-0 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Export CSV
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50">
+                  <th className="whitespace-nowrap px-4 py-3 font-medium text-slate-600">When</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium text-slate-600">Submission</th>
+                  <th className="min-w-[12rem] px-4 py-3 font-medium text-slate-600">Question</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium text-slate-600">Judge</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium text-slate-600">Verdict</th>
+                  <th className="min-w-[16rem] px-4 py-3 font-medium text-slate-600">Reasoning</th>
                 </tr>
-              ) : (
-                filtered.map((row, index) => {
-                  const q = questionById.get(row.question_id)
-                  const j = judgeById.get(row.judge_id)
-                  return (
-                    <tr
-                      key={row.id}
-                      style={{ animationDelay: `${index * 40}ms` }}
-                      className="animate-queue-row-in border-b border-slate-100 last:border-b-0"
-                    >
-                      <td className="whitespace-nowrap px-4 py-3 align-top text-slate-600">
-                        {formatEvaluatedAt(row.created_at)}
-                      </td>
-                      <td className="max-w-[10rem] px-4 py-3 align-top">
-                        <span
-                          className="block truncate text-xs text-slate-800"
-                          title={row.submission_id}
-                        >
-                          {formatDbLabel(row.submission_id, 'submission')}
-                        </span>
-                      </td>
-                      <td className="max-w-md px-4 py-3 align-top text-slate-900">
-                        {q?.question_text ?? (
-                          <span className="text-slate-400 italic">Deleted question</span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 align-top text-slate-800">
-                        {j?.name ?? <span className="text-slate-400 italic">Unknown judge</span>}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 align-top">
-                        <span
-                          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${verdictBadgeClasses(row.verdict)}`}
-                        >
-                          {row.verdict}
-                        </span>
-                      </td>
-                      <td className="max-w-xl px-4 py-3 align-top text-slate-700">
-                        <ReasoningCell reasoning={row.reasoning} />
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-sm text-slate-600">
+                      No evaluations match the current filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((row, index) => {
+                    const q = questionById.get(row.question_id)
+                    const j = judgeById.get(row.judge_id)
+                    return (
+                      <tr
+                        key={row.id}
+                        style={{ animationDelay: `${index * 40}ms` }}
+                        className="animate-queue-row-in border-b border-slate-100 last:border-b-0"
+                      >
+                        <td className="whitespace-nowrap px-4 py-3 align-top text-slate-600">
+                          {formatEvaluatedAt(row.created_at)}
+                        </td>
+                        <td className="max-w-[10rem] px-4 py-3 align-top">
+                          <span
+                            className="block truncate text-xs text-slate-800"
+                            title={row.submission_id}
+                          >
+                            {formatDbLabel(row.submission_id, 'submission')}
+                          </span>
+                        </td>
+                        <td className="max-w-md px-4 py-3 align-top text-slate-900">
+                          {q?.question_text ?? (
+                            <span className="text-slate-400 italic">Deleted question</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 align-top text-slate-800">
+                          {j?.name ?? <span className="text-slate-400 italic">Unknown judge</span>}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 align-top">
+                          <span
+                            className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${verdictBadgeClasses(row.verdict)}`}
+                          >
+                            {row.verdict}
+                          </span>
+                        </td>
+                        <td className="max-w-xl px-4 py-3 align-top text-slate-700">
+                          <ReasoningCell reasoning={row.reasoning} />
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     )
