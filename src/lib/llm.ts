@@ -139,7 +139,8 @@ function tryParseVerdictFromJson(text: string): LLMResult | null {
 }
 
 /**
- * Normalizes the model’s reply into an `LLMResult`: JSON first (including fenced), then substring heuristics on `pass` / `fail` / `inconclusive`, else inconclusive with a fallback reasoning string.
+ * Normalizes the model’s reply into an `LLMResult`: JSON first (including fenced), then whole-word
+ * heuristics (`\bpass\b`, etc.) so substrings like “surpass” / “bypass” do not yield false passes.
  */
 function parseVerdict(text: string): LLMResult {
   const fromJson = tryParseVerdictFromJson(text)
@@ -148,9 +149,10 @@ function parseVerdict(text: string): LLMResult {
   }
 
   const lower = text.toLowerCase()
-  if (lower.includes('pass')) return { verdict: 'pass', reasoning: text }
-  if (lower.includes('fail')) return { verdict: 'fail', reasoning: text }
-  if (lower.includes('inconclusive')) return { verdict: 'inconclusive', reasoning: text }
+  // Check `fail` before `pass` so phrases like “fails to pass” resolve to fail, not pass.
+  if (/\bfail\b/.test(lower)) return { verdict: 'fail', reasoning: text }
+  if (/\bpass\b/.test(lower)) return { verdict: 'pass', reasoning: text }
+  if (/\binconclusive\b/.test(lower)) return { verdict: 'inconclusive', reasoning: text }
 
   return { verdict: 'inconclusive', reasoning: 'Could not determine verdict from response.' }
 }
