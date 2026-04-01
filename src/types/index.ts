@@ -34,10 +34,14 @@ export type Answer = {
   answer_json: JsonValue
 }
 
+export type JudgeProvider = 'openai' | 'anthropic'
+
 export type Judge = {
   id: string
   name: string
   system_prompt: string
-  model_name: string
+  model: string
+  provider: JudgeProvider
   active: boolean
+  created_at: string
 }
