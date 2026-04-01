@@ -33,3 +33,11 @@ export type Answer = {
   question_id: string
   answer_json: JsonValue
 }
+
+export type Judge = {
+  id: string
+  name: string
+  system_prompt: string
+  model_name: string
+  active: boolean
+}

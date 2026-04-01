@@ -1,40 +1,58 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router-dom'
-import { fetchSubmissionCountForQueue } from '../lib/queries'
+import { useMemo } from 'react'
+import { useParams } from 'react-router-dom'
+import { QueueDetailSkeleton } from '../components/queue-detail/QueueDetailSkeleton'
+import { QueueDetailTopBar } from '../components/queue-detail/QueueDetailTopBar'
+import { QueueQuestionsTable } from '../components/queue-detail/QueueQuestionsTable'
+import { fetchQuestionsByQueueId } from '../lib/queries'
 
 function QueueDetailPage() {
-  const { queueId } = useParams<{ queueId: string }>()
-  const safeQueueId = queueId ?? ''
+  const { queueId: queueIdParam } = useParams<{ queueId: string }>()
+  const queueId = queueIdParam ? decodeURIComponent(queueIdParam) : ''
 
-  const submissionCountQuery = useQuery({
-    queryKey: ['submissions', safeQueueId, 'count'],
-    queryFn: () => fetchSubmissionCountForQueue(safeQueueId),
-    enabled: safeQueueId.length > 0,
+  const questionsQuery = useQuery({
+    queryKey: ['questions', queueId],
+    queryFn: () => fetchQuestionsByQueueId(queueId),
+    enabled: queueId.length > 0,
+    retry: 1,
   })
+
+  const detailDataReady = questionsQuery.isFetched
+  const showDetailSkeleton = queueId.length > 0 && !detailDataReady
+
+  const questions = questionsQuery.data ?? []
+
+  const canRunAiJudges = useMemo(() => questions.length > 0, [questions.length])
+
+  const fetchError = questionsQuery.isError
+    ? questionsQuery.error instanceof Error
+      ? questionsQuery.error.message
+      : null
+    : null
+
+  if (!queueId) {
+    return (
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <p className="text-sm text-slate-600">Missing queue id.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-6 py-10">
-      <div className="space-y-2">
-        <Link to="/queues" className="inline-block text-sm font-medium text-indigo-600 hover:text-indigo-700">
-          ← Back to Queues
-        </Link>
-        <h1 className="text-2xl font-semibold text-slate-900">Queue {safeQueueId || '—'}</h1>
-        <p className="max-w-2xl text-sm text-slate-600">
-          Workspace for this queue — configuration and tools will live here.
-        </p>
-        <p className="text-sm text-slate-700">
-          {submissionCountQuery.isLoading ? (
-            <span className="inline-block h-4 w-24 animate-pulse rounded bg-slate-200" />
-          ) : submissionCountQuery.isError ? (
-            <span className="text-red-700">Could not load submission count.</span>
-          ) : (
-            <span>
-              <span className="font-medium text-slate-900">{submissionCountQuery.data ?? 0}</span> submission
-              {(submissionCountQuery.data ?? 0) === 1 ? '' : 's'} imported for this queue.
-            </span>
-          )}
-        </p>
-      </div>
+      <QueueDetailTopBar canRunAiJudges={canRunAiJudges} />
+
+      <header>
+        <h1 className="font-mono text-2xl font-semibold tracking-tight text-slate-900">{queueId}</h1>
+      </header>
+
+      {fetchError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {fetchError}
+        </div>
+      ) : null}
+
+      {showDetailSkeleton ? <QueueDetailSkeleton rows={5} /> : <QueueQuestionsTable questions={questions} />}
     </div>
   )
 }

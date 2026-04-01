@@ -2,6 +2,7 @@
  * Read-only Supabase fetch helpers for the UI (TanStack Query `queryFn`s).
  * Throws `Error` with the PostgREST message on failure.
  */
+import type { Question } from '../types'
 import { supabase } from './supabase'
 
 /** One row in the queue list: id plus denormalized counts for the cards. */
@@ -63,3 +64,18 @@ export async function fetchSubmissionCountForQueue(queueId: string): Promise<num
 
   return count ?? 0
 }
+
+export async function fetchQuestionsByQueueId(queueId: string): Promise<Question[]> {
+  const { data, error } = await supabase
+    .from('questions')
+    .select('id, queue_id, question_type, question_text, rev')
+    .eq('queue_id', queueId)
+    .order('question_text', { ascending: true })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ?? []
+}
+
