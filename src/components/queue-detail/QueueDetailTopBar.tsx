@@ -9,6 +9,14 @@ type QueueDetailTopBarProps = {
   progress: RunProgress | null
 }
 
+function PlayIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+      <path d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.77a1.5 1.5 0 0 0 2.3 1.27l9.2-5.89a1.5 1.5 0 0 0 0-2.54L6.3 2.84Z" />
+    </svg>
+  )
+}
+
 export function QueueDetailTopBar({
   queueId,
   canRunAiJudges,
@@ -31,46 +39,42 @@ export function QueueDetailTopBar({
   const resultsHref = `/results?queue=${encodeURIComponent(queueId)}`
 
   return (
-    <div className="border-b border-slate-200 pb-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <Link to="/queues" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
-          ← Queues
-        </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          {isRunning ? (
-            <span className="text-sm text-slate-600">
-              Running… {progress != null ? `${doneSoFar}/${progress.planned}` : '—'}
-            </span>
-          ) : null}
-          {runFinished ? (
-            <span className="text-sm text-slate-600">
-              Done — {progress.completed} completed, {progress.failed} failed
-            </span>
-          ) : null}
-          {runFinished ? (
-            <Link
-              to={resultsHref}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700"
-            >
-              View results
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled={isRunning || !canRunAiJudges}
-              onClick={onRun}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Run AI Judges
-            </button>
-          )}
-        </div>
+    <div className="flex w-full min-w-0 flex-col items-stretch gap-3 sm:w-auto sm:min-w-[16rem] sm:items-end">
+      <div className="flex flex-wrap items-center justify-end gap-2 sm:justify-end">
+        {isRunning ? (
+          <span className="text-sm text-stone-600">
+            Running… {progress != null ? `${doneSoFar}/${progress.planned}` : '—'}
+          </span>
+        ) : null}
+        {runFinished && progress ? (
+          <span className="text-sm text-stone-600">
+            Done — {progress.completed} ok, {progress.failed} failed
+          </span>
+        ) : null}
+        {runFinished ? (
+          <Link
+            to={resultsHref}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700"
+          >
+            View results
+          </Link>
+        ) : (
+          <button
+            type="button"
+            disabled={isRunning || !canRunAiJudges}
+            onClick={onRun}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <PlayIcon className="size-4 shrink-0 opacity-95" />
+            Run AI Judges
+          </button>
+        )}
       </div>
 
       {isRunning ? (
-        <div className="mt-4 space-y-2">
+        <div className="w-full max-w-md space-y-2 sm:ml-auto">
           <div
-            className="h-2 overflow-hidden rounded-full bg-slate-100"
+            className="h-2 overflow-hidden rounded-full bg-stone-200/80"
             role="progressbar"
             aria-valuenow={progress != null && progress.planned > 0 ? Math.round(barPct) : undefined}
             aria-valuemin={0}

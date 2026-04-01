@@ -55,6 +55,7 @@ export type JudgeAssignment = {
 
 export type Evaluation = {
   id: string
+  queue_id: string
   submission_id: string
   question_id: string
   judge_id: string

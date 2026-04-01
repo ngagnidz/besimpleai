@@ -1,11 +1,13 @@
 /**
- * Read-only Supabase fetch helpers for the UI (TanStack Query `queryFn`s).
- * Throws `Error` with the PostgREST message on failure.
+ * Read-only Supabase data access for the application layer.
+ *
+ * Primary consumers: React components (TanStack Query `queryFn` callbacks) and `runEvaluations` in `runner.ts`.
+ * On request failure, functions throw `Error` using the message returned by PostgREST.
  */
 import type { Answer, Evaluation, Judge, JudgeAssignment, Question, Submission } from '../types'
 import { supabase } from './supabase'
 
-/** One row in the queue list: id plus denormalized counts for the cards. */
+/** Summary row for queue list cards: identifier and row counts for submissions and questions. */
 export type QueueSummary = {
   id: string
   submissionsCount: number
@@ -13,8 +15,12 @@ export type QueueSummary = {
 }
 
 /**
- * Loads all queues (ordered by id) and, per queue, exact counts from `submissions` and `questions`.
- * Uses `count` + `head` requests — no full row payloads.
+ * Lists every queue and aggregates submission and question counts per queue.
+ * Uses `count` with `head: true` so full rows are not transferred.
+ *
+ * Consumers: `QueuesPage`, `Results` (queue selection metadata).
+ *
+ * @throws Error if any Supabase request fails (message from the API).
  */
 export async function fetchQueueSummaries(): Promise<QueueSummary[]> {
   const { data: queues, error } = await supabase.from('queues').select('id').order('id', { ascending: true })
@@ -50,21 +56,12 @@ export async function fetchQueueSummaries(): Promise<QueueSummary[]> {
 }
 
 /**
- * Submission count for one queue (e.g. queue detail header). Single aggregate query, not per-row.
+ * Loads all questions for a single queue, ordered by question text.
+ *
+ * Consumers: `QueueDetailPage`, `runEvaluations`.
+ *
+ * @throws Error if the Supabase request fails (message from the API).
  */
-export async function fetchSubmissionCountForQueue(queueId: string): Promise<number> {
-  const { count, error } = await supabase
-    .from('submissions')
-    .select('*', { count: 'exact', head: true })
-    .eq('queue_id', queueId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return count ?? 0
-}
-
 export async function fetchQuestionsByQueueId(queueId: string): Promise<Question[]> {
   const { data, error } = await supabase
     .from('questions')
@@ -79,6 +76,13 @@ export async function fetchQuestionsByQueueId(queueId: string): Promise<Question
   return data ?? []
 }
 
+/**
+ * Loads all judge configurations, including inactive records, ordered by creation time (newest first).
+ *
+ * Consumers: `Judges`, `Results` (display names and metadata in the results grid).
+ *
+ * @throws Error if the Supabase request fails (message from the API).
+ */
 export async function fetchJudges(): Promise<Judge[]> {
   const { data, error } = await supabase
     .from('judges')
@@ -92,6 +96,13 @@ export async function fetchJudges(): Promise<Judge[]> {
   return (data ?? []) as Judge[]
 }
 
+/**
+ * Loads judges where `active` is true, ordered by name.
+ *
+ * Consumers: `QueueDetailPage` (assignment UI), `runEvaluations` (only active judges are invoked).
+ *
+ * @throws Error if the Supabase request fails (message from the API).
+ */
 export async function fetchActiveJudges(): Promise<Judge[]> {
   const { data, error } = await supabase
     .from('judges')
@@ -106,6 +117,13 @@ export async function fetchActiveJudges(): Promise<Judge[]> {
   return (data ?? []) as Judge[]
 }
 
+/**
+ * Loads judge-to-question assignments for one queue.
+ *
+ * Consumers: `QueueDetailPage` (assignment matrix), `runEvaluations` (pairing logic).
+ *
+ * @throws Error if the Supabase request fails (message from the API).
+ */
 export async function fetchJudgeAssignmentsForQueue(queueId: string): Promise<JudgeAssignment[]> {
   const { data, error } = await supabase
     .from('judge_assignments')
@@ -119,6 +137,13 @@ export async function fetchJudgeAssignmentsForQueue(queueId: string): Promise<Ju
   return (data ?? []) as JudgeAssignment[]
 }
 
+/**
+ * Loads all submissions belonging to a queue.
+ *
+ * Consumers: `runEvaluations` (enumerate work and resolve answers).
+ *
+ * @throws Error if the Supabase request fails (message from the API).
+ */
 export async function fetchSubmissionsForQueue(queueId: string): Promise<Submission[]> {
   const { data, error } = await supabase
     .from('submissions')
@@ -132,6 +157,14 @@ export async function fetchSubmissionsForQueue(queueId: string): Promise<Submiss
   return (data ?? []) as Submission[]
 }
 
+/**
+ * Loads answers for one or more submissions in a single query.
+ * When `submissionIds` is empty, returns an empty array without calling the API.
+ *
+ * Consumers: `runEvaluations`.
+ *
+ * @throws Error if the Supabase request fails (message from the API).
+ */
 export async function fetchAnswersForSubmissions(submissionIds: string[]): Promise<Answer[]> {
   if (submissionIds.length === 0) {
     return []
@@ -150,19 +183,17 @@ export async function fetchAnswersForSubmissions(submissionIds: string[]): Promi
 }
 
 /**
- * Evaluations for a queue (via submissions belonging to that queue). Newest first.
+ * Loads evaluation records for a queue, filtered by `queue_id`, newest first.
+ *
+ * Consumers: `QueueDetailPage` (aggregate statistics and recent activity).
+ *
+ * @throws Error if the Supabase request fails (message from the API).
  */
 export async function fetchEvaluationsForQueue(queueId: string): Promise<Evaluation[]> {
-  const submissions = await fetchSubmissionsForQueue(queueId)
-  const submissionIds = submissions.map((s) => s.id)
-  if (submissionIds.length === 0) {
-    return []
-  }
-
   const { data, error } = await supabase
     .from('evaluations')
-    .select('id, submission_id, question_id, judge_id, verdict, reasoning, created_at')
-    .in('submission_id', submissionIds)
+    .select('id, queue_id, submission_id, question_id, judge_id, verdict, reasoning, created_at')
+    .eq('queue_id', queueId)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -172,20 +203,38 @@ export async function fetchEvaluationsForQueue(queueId: string): Promise<Evaluat
   return (data ?? []) as Evaluation[]
 }
 
-/** Merged evaluations for several queues, newest first (by `created_at`). */
+/**
+ * Loads evaluations for any of the given queue identifiers, ordered by `created_at` descending.
+ *
+ * Consumers: `Results` when multiple queues are selected.
+ *
+ * @throws Error if the Supabase request fails (message from the API).
+ */
 export async function fetchEvaluationsForQueues(queueIds: string[]): Promise<Evaluation[]> {
   if (queueIds.length === 0) {
     return []
   }
-  const chunks = await Promise.all(queueIds.map((id) => fetchEvaluationsForQueue(id)))
-  const merged = chunks.flat()
-  merged.sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-  )
-  return merged
+  const { data, error } = await supabase
+    .from('evaluations')
+    .select('id, queue_id, submission_id, question_id, judge_id, verdict, reasoning, created_at')
+    .in('queue_id', queueIds)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return (data ?? []) as Evaluation[]
 }
 
-/** All questions for the given queues (order not guaranteed; sort in UI if needed). */
+/**
+ * Loads questions for several queues by issuing one fetch per queue and concatenating results.
+ * Global ordering is not defined; the UI should sort or group as needed.
+ *
+ * Consumers: `Results` (question labels and column metadata).
+ *
+ * @throws Error if any per-queue fetch fails (message from the API).
+ */
 export async function fetchQuestionsByQueueIds(queueIds: string[]): Promise<Question[]> {
   if (queueIds.length === 0) {
     return []
@@ -193,4 +242,3 @@ export async function fetchQuestionsByQueueIds(queueIds: string[]): Promise<Ques
   const chunks = await Promise.all(queueIds.map((id) => fetchQuestionsByQueueId(id)))
   return chunks.flat()
 }
-

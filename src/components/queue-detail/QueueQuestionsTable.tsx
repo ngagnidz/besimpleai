@@ -1,5 +1,6 @@
 import type { Judge, JudgeAssignment, Question } from '../../types'
 import { QuestionJudgeMultiSelect } from './QuestionJudgeMultiSelect'
+import { formatQuestionTypeLabel, questionTypePillClass } from './questionTypeDisplay'
 
 type QueueQuestionsTableProps = {
   questions: Question[]
@@ -12,6 +13,9 @@ function judgeIdsForQuestion(assignments: JudgeAssignment[], questionId: string)
   return assignments.filter((a) => a.question_id === questionId).map((a) => a.judge_id)
 }
 
+const headerRowClass =
+  'border-b border-indigo-200/80 bg-gradient-to-b from-indigo-50/95 to-violet-100/50'
+
 export function QueueQuestionsTable({
   questions,
   judges,
@@ -20,25 +24,29 @@ export function QueueQuestionsTable({
 }: QueueQuestionsTableProps) {
   if (questions.length === 0) {
     return (
-      <p className="animate-queues-panel-in rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+      <p className="animate-queues-panel-in rounded-xl border border-stone-200 bg-stone-50/90 px-4 py-10 text-center text-sm text-stone-600">
         No questions found for this queue
       </p>
     )
   }
 
   return (
-    <div className="animate-queues-panel-in rounded-xl border border-slate-200 bg-white shadow-sm">
+    <section
+      id="queue-questions"
+      className="animate-queues-panel-in overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-[0_2px_8px_-2px_rgba(28,25,23,0.06)]"
+    >
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50">
-              <th className="px-4 py-3 font-medium text-slate-600">Question Text</th>
-              <th className="px-4 py-3 font-medium text-slate-600">Type</th>
-              <th className="min-w-[14rem] px-4 py-3 text-left font-medium text-slate-600">
-                <span className="block w-full text-left">Assigned Judges</span>
-                <span className="mt-0.5 block w-full text-left text-[0.7rem] font-normal normal-case tracking-normal text-slate-400">
-                  Toggle judges on or off per question
-                </span>
+            <tr className={headerRowClass}>
+              <th className="px-5 py-3.5 text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-stone-600">
+                Question
+              </th>
+              <th className="whitespace-nowrap px-5 py-3.5 text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-stone-600">
+                Type
+              </th>
+              <th className="min-w-[14rem] px-5 py-3.5 text-left text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-stone-600">
+                Assigned judges
               </th>
             </tr>
           </thead>
@@ -49,18 +57,21 @@ export function QueueQuestionsTable({
                 <tr
                   key={q.id}
                   style={{ animationDelay: `${index * 50}ms` }}
-                  className="animate-queue-row-in border-b border-slate-100 last:border-b-0"
+                  className="animate-queue-row-in border-b border-stone-100 last:border-b-0"
                 >
-                  <td className="max-w-md px-4 py-3 align-top text-slate-900">{q.question_text}</td>
-                  <td className="px-4 py-3 align-top">
-                    <span className="inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-                      {q.question_type}
+                  <td className="max-w-md px-5 py-4 align-top text-stone-900">{q.question_text}</td>
+                  <td className="whitespace-nowrap px-5 py-4 align-top">
+                    <span
+                      className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${questionTypePillClass(q.question_type)}`}
+                    >
+                      {formatQuestionTypeLabel(q.question_type)}
                     </span>
                   </td>
-                  <td className="min-w-[14rem] max-w-md align-top px-4 py-3 text-left">
+                  <td className="min-w-[14rem] max-w-md align-top px-5 py-4 text-left">
                     <QuestionJudgeMultiSelect
                       judges={judges}
                       selectedJudgeIds={selected}
+                      variant="compact"
                       onChange={(next) => onJudgeSelectionChange(q.id, next)}
                     />
                   </td>
@@ -70,6 +81,6 @@ export function QueueQuestionsTable({
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   )
 }

@@ -1,6 +1,7 @@
 import { useCallback, useId, useMemo, useState, type ReactNode } from 'react'
 import type { QueueSummary } from '../../lib/queries'
 import type { Evaluation, Judge, Question, Verdict } from '../../types'
+import { formatDbLabel } from '../../lib/utils'
 
 export type ResultsTableProps = {
   queues: QueueSummary[]
@@ -580,10 +581,10 @@ export function ResultsTable({
                       </td>
                       <td className="max-w-[10rem] px-4 py-3 align-top">
                         <span
-                          className="block truncate font-mono text-xs text-slate-800"
+                          className="block truncate text-xs text-slate-800"
                           title={row.submission_id}
                         >
-                          {row.submission_id}
+                          {formatDbLabel(row.submission_id, 'submission')}
                         </span>
                       </td>
                       <td className="max-w-md px-4 py-3 align-top text-slate-900">

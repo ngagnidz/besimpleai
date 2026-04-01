@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import type { QueueSummary } from '../../lib/queries'
+import { formatDbLabel } from '../../lib/utils'
 
 type QueueListProps = {
   rows: QueueSummary[]
@@ -34,12 +35,15 @@ function QueueList({ rows }: QueueListProps) {
           <button
             type="button"
             aria-label={`Open queue ${row.id}`}
+            title={row.id}
             onClick={() => void navigate(`/queues/${encodeURIComponent(row.id)}`)}
             className="group flex w-full min-w-0 items-center gap-6 rounded-xl border border-slate-200/70 bg-white px-8 py-6 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-200 ease-out hover:border-slate-300 hover:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/80 focus-visible:ring-offset-2"
           >
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Queue</p>
-              <p className="mt-1.5 truncate font-mono text-xl font-bold leading-tight text-slate-900">{row.id}</p>
+              <p className="mt-1.5 truncate text-xl font-bold leading-tight text-slate-900">
+                {formatDbLabel(row.id, 'queue')}
+              </p>
               <p className="mt-2 text-sm text-slate-500">{formatQueueMeta(row.submissionsCount, row.questionsCount)}</p>
             </div>
 
