@@ -2,8 +2,12 @@
  * Submission JSON parsing: validates upload payloads and normalizes them into rows for persistence.
  * No database access—use `ingestData` from `./ingest` to write these rows.
  */
+import { v5 as uuidv5 } from 'uuid'
 import type { Answer, JsonValue, Question, Queue, Submission } from '../types'
 import { isJsonValue, isRecord } from './utils'
+
+/** RFC 4122 URL namespace — valid under `uuid` v13’s stricter parser (variant nibble must be 8–b). */
+const ANSWER_ID_NAMESPACE = '6ba7b811-9dad-11d1-80b4-00c04fd430c8'
 
 /** Normalized rows ready for `ingestData`, plus UI preview metadata. */
 export type ParsedData = {
@@ -186,7 +190,7 @@ export function parseSubmissions(raw: unknown): ParsedData {
 
     for (const [templateQuestionId, answerValue] of Object.entries(answersObj)) {
       answers.push({
-        id: `${id}::${templateQuestionId}`,
+        id: uuidv5(`${id}::${templateQuestionId}`, ANSWER_ID_NAMESPACE),
         submission_id: id,
         question_id: `${queueId}::${templateQuestionId}::${submissionTemplateRevs.get(templateQuestionId) ?? 1}`,
         answer_json: answerValue,

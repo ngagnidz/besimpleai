@@ -1,4 +1,18 @@
-import { useCallback, useId, useMemo, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import {
+  defaultResultsCsvFilename,
+  downloadCsvFile,
+  evaluationsToCsv,
+} from '../../lib/evaluationCsv'
 import type { QueueSummary } from '../../lib/queries'
 import type { Evaluation, Judge, Question, Verdict } from '../../types'
 import { formatDbLabel } from '../../lib/utils'
@@ -205,20 +219,48 @@ function formatEvaluatedAt(iso: string): string {
   })
 }
 
-/** Collapsed to ~4 lines unless expanded; “Read more” when text is likely truncated. */
+/** Collapsed to 4 lines (`line-clamp-4`); “Read more” only when the clamp actually hides text (not char/line heuristics). */
 function ReasoningCell({ reasoning }: { reasoning: string }) {
   const [expanded, setExpanded] = useState(false)
-  const likelyTruncates = reasoning.length > 180 || reasoning.split(/\r?\n/).length > 4
+  const textRef = useRef<HTMLParagraphElement>(null)
+  const [truncated, setTruncated] = useState(false)
+
+  useEffect(() => {
+    setExpanded(false)
+  }, [reasoning])
+
+  const measureTruncation = useCallback(() => {
+    const el = textRef.current
+    if (!el || !reasoning.trim()) {
+      setTruncated(false)
+      return
+    }
+    if (expanded) return
+    setTruncated(el.scrollHeight > el.clientHeight + 1)
+  }, [expanded, reasoning])
+
+  useLayoutEffect(() => {
+    measureTruncation()
+  }, [measureTruncation])
+
+  useEffect(() => {
+    const el = textRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => measureTruncation())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [measureTruncation])
 
   return (
     <div>
       <p
+        ref={textRef}
         className={`whitespace-pre-wrap break-words ${expanded ? '' : 'line-clamp-4'}`}
         title={expanded ? undefined : reasoning}
       >
         {reasoning}
       </p>
-      {likelyTruncates ? (
+      {(truncated || expanded) && reasoning ? (
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
@@ -395,12 +437,20 @@ export function ResultsTable({
     return sortedQuestions.filter((q) => matchesSearch(q.question_text, questionQuery))
   }, [sortedQuestions, questionQuery])
 
-  const filtered = evaluations.filter((e) => {
-    if (selectedJudgeIds.length > 0 && !selectedJudgeIds.includes(e.judge_id)) return false
-    if (selectedQuestionIds.length > 0 && !selectedQuestionIds.includes(e.question_id)) return false
-    if (selectedVerdicts.length > 0 && !selectedVerdicts.includes(e.verdict)) return false
-    return true
-  })
+  const filtered = useMemo(() => {
+    return evaluations.filter((e) => {
+      if (selectedJudgeIds.length > 0 && !selectedJudgeIds.includes(e.judge_id)) return false
+      if (selectedQuestionIds.length > 0 && !selectedQuestionIds.includes(e.question_id)) return false
+      if (selectedVerdicts.length > 0 && !selectedVerdicts.includes(e.verdict)) return false
+      return true
+    })
+  }, [evaluations, selectedJudgeIds, selectedQuestionIds, selectedVerdicts])
+
+  const handleExportCsv = useCallback(() => {
+    if (filtered.length === 0) return
+    const csv = evaluationsToCsv(filtered, questionById, judgeById)
+    downloadCsvFile(defaultResultsCsvFilename(), csv)
+  }, [filtered, questionById, judgeById])
 
   const passRate =
     filtered.length === 0
@@ -574,11 +624,21 @@ export function ResultsTable({
       </p>
     ) : (
       <div className={mainCardClass}>
-        <p className="border-b border-slate-100 bg-slate-50/90 px-4 py-3 text-sm font-medium text-slate-800">
-          {passRate === null
-            ? `—% pass of ${filtered.length} evaluations`
-            : `${passRate}% pass of ${filtered.length} evaluations`}
-        </p>
+        <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <p className="text-sm font-medium text-slate-800">
+            {passRate === null
+              ? `—% pass of ${filtered.length} evaluations`
+              : `${passRate}% pass of ${filtered.length} evaluations`}
+          </p>
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={filtered.length === 0}
+            className="shrink-0 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Export CSV
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead>

@@ -122,8 +122,19 @@ function QueueDetailPage() {
   const canRunAiJudges = useMemo(() => {
     const qs = questionsQuery.data ?? []
     const asn = assignmentsQuery.data ?? []
-    return qs.length > 0 && asn.some((a) => qs.some((q) => q.id === a.question_id))
-  }, [questionsQuery.data, assignmentsQuery.data])
+    const activeIds = new Set((judgesQuery.data ?? []).map((j) => j.id))
+    if (qs.length === 0 || activeIds.size === 0) return false
+    return asn.some((a) => activeIds.has(a.judge_id) && qs.some((q) => q.id === a.question_id))
+  }, [questionsQuery.data, assignmentsQuery.data, judgesQuery.data])
+
+  const runButtonDisabledTitle = useMemo(() => {
+    if (canRunAiJudges) return undefined
+    const qs = questionsQuery.data ?? []
+    const activeCount = (judgesQuery.data ?? []).length
+    if (qs.length === 0) return 'This queue has no questions yet.'
+    if (activeCount === 0) return 'No active judges — create or activate one on the Judges page.'
+    return 'Assign at least one active judge to a question in this queue.'
+  }, [canRunAiJudges, questionsQuery.data, judgesQuery.data])
 
   const lastRunIso =
     queueRunsMetaQuery.data?.lastCreatedAt ?? evalStats.lastEvalIso ?? null
@@ -206,6 +217,7 @@ function QueueDetailPage() {
                   <QueueDetailTopBar
                     queueId={queueId}
                     canRunAiJudges={canRunAiJudges}
+                    runDisabledTitle={runButtonDisabledTitle}
                     onRun={handleRun}
                     isRunning={isRunning}
                     progress={progress}

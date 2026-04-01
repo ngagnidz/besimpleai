@@ -4,6 +4,8 @@ import type { RunProgress } from '../../lib/runner'
 type QueueDetailTopBarProps = {
   queueId: string
   canRunAiJudges: boolean
+  /** Shown as native tooltip when Run is disabled (e.g. no active judges). */
+  runDisabledTitle?: string
   onRun: () => void
   isRunning: boolean
   progress: RunProgress | null
@@ -20,6 +22,7 @@ function PlayIcon({ className }: { className?: string }) {
 export function QueueDetailTopBar({
   queueId,
   canRunAiJudges,
+  runDisabledTitle,
   onRun,
   isRunning,
   progress,
@@ -62,6 +65,7 @@ export function QueueDetailTopBar({
           <button
             type="button"
             disabled={isRunning || !canRunAiJudges}
+            title={!isRunning && !canRunAiJudges ? runDisabledTitle : undefined}
             onClick={onRun}
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
