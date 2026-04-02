@@ -18,9 +18,11 @@ export type InsertEvaluationInput = {
  * @throws Error with the PostgREST message if the request fails
  */
 export async function insertEvaluation(row: InsertEvaluationInput): Promise<void> {
+  /** Refresh on upsert so re-runs update Results “When”; omitted created_at would keep the first-run timestamp. */
+  const payload = { ...row, created_at: new Date().toISOString() }
   const { error } = await supabase
     .from('evaluations')
-    .upsert(row, { onConflict: 'submission_id,question_id,judge_id' })
+    .upsert(payload, { onConflict: 'submission_id,question_id,judge_id' })
   if (error) {
     throw new Error(error.message)
   }

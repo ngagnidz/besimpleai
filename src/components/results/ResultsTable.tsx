@@ -626,7 +626,7 @@ export function ResultsTable({
     ) : (
       <div className="flex flex-col gap-6">
         <div className={`${mainCardClass} p-5`}>
-          <h2 className="mb-4 text-base font-semibold text-slate-900">Pass rate by judge</h2>
+          <h2 className="mb-4 text-base font-semibold text-slate-900">Verdict mix by judge</h2>
           <JudgePassRateChart evaluations={filtered} judges={judges} />
         </div>
         <div className={mainCardClass}>
