@@ -108,7 +108,7 @@ function Results() {
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-gradient-to-b from-slate-50/70 via-white to-indigo-50/15">
-      <div className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col px-4 py-8 sm:px-6">
+      <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-8 sm:px-6">
         <header className="animate-queues-panel-in max-w-2xl space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-[1.65rem]">Results</h1>
           <p className="text-sm leading-relaxed text-slate-600">
