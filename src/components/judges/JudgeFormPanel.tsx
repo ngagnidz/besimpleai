@@ -32,7 +32,7 @@ const PROVIDERS: { value: JudgeProvider; label: string; hint: string }[] = [
 /** Hardcoded model ids — keep in sync with what your judge runner passes to each API. */
 const MODEL_OPTIONS: Record<JudgeProvider, readonly string[]> = {
   openai: ['gpt-4o', 'gpt-4o-mini'],
-  anthropic: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-haiku-4-5'],
+  anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
 }
 
 function firstModelForProvider(p: JudgeProvider): string {

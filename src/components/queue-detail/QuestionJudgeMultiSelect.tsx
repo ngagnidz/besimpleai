@@ -46,7 +46,7 @@ export function QuestionJudgeMultiSelect({
   return (
     <fieldset className="min-w-0 border-0 p-0 text-left">
       <legend className="sr-only">Assigned judges — toggle each judge</legend>
-      <div className={`flex flex-wrap items-start justify-start ${compact ? 'gap-2' : 'gap-2'}`}>
+      <div className="flex flex-wrap items-start justify-start gap-2">
         {judges.map((j) => {
           const selected = selectedJudgeIds.includes(j.id)
           return (
