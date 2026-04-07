@@ -2,9 +2,6 @@
 
 A web app that runs LLM-based judges on annotation submissions and records pass/fail/inconclusive verdicts with reasoning. Upload a JSON file, configure judges, assign them to questions, run evaluations against real LLM APIs, and visualize results.
 
-## Demo
-[link]
-
 ## Setup
 
 ```bash
