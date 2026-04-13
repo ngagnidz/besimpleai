@@ -25,6 +25,30 @@ function questionTypeUserHint(questionType: string): string {
 }
 
 /**
+ * Shared JSON Schema for judge output. Enforced via OpenAI `response_format` (Structured Outputs)
+ * and Anthropic `output_config.format`; no duplicate prose format instructions in the system prompt.
+ *
+ * @see https://platform.openai.com/docs/guides/structured-outputs
+ * @see https://docs.anthropic.com/en/docs/build-with-claude/structured-outputs
+ */
+const VERDICT_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    verdict: {
+      type: 'string',
+      enum: ['pass', 'fail', 'inconclusive'],
+      description: 'Whether the answer satisfies the rubric.',
+    },
+    reasoning: {
+      type: 'string',
+      description: 'One concise sentence explaining the verdict.',
+    },
+  },
+  required: ['verdict', 'reasoning'] as const,
+  additionalProperties: false,
+} as const
+
+/**
  * Runs `fn` up to `retries` times. On rate-limit-style errors (message contains `429` or “rate limit”),
  * waits with exponential backoff (1s, 2s, 4s, …) before retrying; other errors rethrow immediately.
  */
@@ -44,7 +68,7 @@ async function callWithRetry(fn: () => Promise<LLMResult>, retries = 3): Promise
 }
 
 /**
- * Sends the judge’s `system_prompt` (plus fixed JSON-instruction suffix), question type (with optional format hint), question text, and answer text to the configured provider and returns a parsed verdict.
+ * Sends the judge’s `system_prompt`, question type (with optional format hint), question text, and answer text to the configured provider and returns a parsed verdict. Output shape is enforced by the provider (JSON Schema), not by appending format text to the system prompt.
  * Rate-limited responses are retried with backoff before surfacing as errors to the caller.
  *
  * @throws Error if `judge.provider` is not supported
@@ -56,9 +80,7 @@ export async function callLLM(
   questionType: string,
   answerText: string,
 ): Promise<LLMResult> {
-  const systemPrompt =
-    judge.system_prompt +
-    `\n\nRespond only with valid JSON, no other text:\n{"verdict": "pass" | "fail" | "inconclusive", "reasoning": "<one sentence>"}`
+  const systemPrompt = judge.system_prompt
 
   const typeHint = questionTypeUserHint(questionType)
   const userMessage =
@@ -78,7 +100,7 @@ export async function callLLM(
   })
 }
 
-/** Chat Completions with `response_format: json_object`; parses assistant text via `parseVerdict`. */
+/** Chat Completions with Structured Outputs (`response_format.type: json_schema`, `strict: true`). */
 async function callOpenAI(
   model: string,
   systemPrompt: string,
@@ -90,20 +112,34 @@ async function callOpenAI(
     dangerouslyAllowBrowser: true,
   })
 
-  const response = await client.chat.completions.create({
+  const request = {
     model,
     messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: userMessage },
     ],
-    response_format: { type: 'json_object' },
-  })
+    response_format: {
+      type: 'json_schema' as const,
+      json_schema: {
+        name: 'judge_verdict',
+        description: 'Rubric evaluation result for the given question and answer.',
+        schema: VERDICT_JSON_SCHEMA,
+        strict: true,
+      },
+    },
+  }
+
+  console.log('[callOpenAI] request', request)
+
+  const response = await client.chat.completions.create(request)
+
+  console.log('[callOpenAI] response', response)
 
   const text = response.choices[0]?.message?.content ?? ''
   return parseVerdict(text)
 }
 
-/** Messages API with system + user; parses first text block via `parseVerdict`. */
+/** Messages API with `output_config.format` JSON schema (structured outputs). */
 async function callAnthropic(
   model: string,
   systemPrompt: string,
@@ -120,6 +156,12 @@ async function callAnthropic(
     max_tokens: 256,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
+    output_config: {
+      format: {
+        type: 'json_schema',
+        schema: { ...VERDICT_JSON_SCHEMA },
+      },
+    },
   })
 
   const block = response.content[0]
