@@ -121,6 +121,7 @@ function parseQuestionEntry(
  * @throws Descriptive `Error` messages for invalid structure or types (includes array indices).
  */
 export function parseSubmissions(raw: unknown): ParsedData {
+
   if (!Array.isArray(raw)) {
     throw new Error('JSON root must be an array of submissions.')
   }
@@ -141,21 +142,27 @@ export function parseSubmissions(raw: unknown): ParsedData {
 
     const id = item.id
     const queueId = item.queueId
+
     if (typeof id !== 'string' || id.trim().length === 0) {
       throw new Error(`Item at index ${i}: "id" must be a non-empty string.`)
     }
+
     if (submissionIds.has(id)) {
       throw new Error(
         `Item at index ${i}: duplicate submission id "${id}" — each submission id must appear once in the file.`,
       )
     }
+
     submissionIds.add(id)
     if (typeof queueId !== 'string' || queueId.trim().length === 0) {
       throw new Error(`Item at index ${i}: "queueId" must be a non-empty string.`)
     }
 
     const questionsRaw = validateQuestionsArray(item.questions, i)
+
     const answersObj = validateAnswersObject(item.answers, i)
+
+    
     previewRows.push({
       submissionId: id,
       queueId,

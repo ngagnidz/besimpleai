@@ -26,8 +26,13 @@ function UploadPage() {
           return
         }
 
+
         const data = parseSubmissions(raw)
+
+
         await ingestData(data)
+
+        
         await queryClient.invalidateQueries({ queryKey: ['queues', 'summaries'] })
         navigate('/queues', { replace: true })
       } catch (err) {

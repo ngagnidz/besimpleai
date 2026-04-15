@@ -1,11 +1,17 @@
-/** Browser-side judge LLM calls. Used only from `runEvaluations` in `runner.ts`. Dynamic-imports OpenAI / Anthropic SDKs; keys come from `VITE_OPENAI_API_KEY` and `VITE_ANTHROPIC_API_KEY`. */
-import type { Judge, Verdict } from '../types'
+/** Browser-side judge LLM calls. Used only from `runEvaluations` in `runner.ts`. Keys come from `VITE_OPENAI_API_KEY` and `VITE_ANTHROPIC_API_KEY`. */
+import { createAnthropic } from '@ai-sdk/anthropic'
+import { createOpenAI } from '@ai-sdk/openai'
+import { generateText, Output } from 'ai'
+import { z } from 'zod'
+import type { Judge } from '../types'
+
+const verdictSchema = z.object({
+  verdict: z.enum(['pass', 'fail', 'inconclusive']),
+  reasoning: z.string().describe('One concise sentence explaining the verdict.'),
+})
 
 /** Parsed model output before writing to `evaluations`. */
-export type LLMResult = {
-  verdict: Verdict
-  reasoning: string
-}
+export type LLMResult = z.infer<typeof verdictSchema>
 
 /** One-line guidance for the user message so judges interpret `answer_json` shape correctly (ingest may use other strings—those get no extra line). */
 const QUESTION_TYPE_USER_HINTS: Record<string, string> = {
@@ -23,30 +29,6 @@ function questionTypeUserHint(questionType: string): string {
   const key = questionType.trim()
   return QUESTION_TYPE_USER_HINTS[key] ?? ''
 }
-
-/**
- * Shared JSON Schema for judge output. Enforced via OpenAI `response_format` (Structured Outputs)
- * and Anthropic `output_config.format`; no duplicate prose format instructions in the system prompt.
- *
- * @see https://platform.openai.com/docs/guides/structured-outputs
- * @see https://docs.anthropic.com/en/docs/build-with-claude/structured-outputs
- */
-const VERDICT_JSON_SCHEMA = {
-  type: 'object',
-  properties: {
-    verdict: {
-      type: 'string',
-      enum: ['pass', 'fail', 'inconclusive'],
-      description: 'Whether the answer satisfies the rubric.',
-    },
-    reasoning: {
-      type: 'string',
-      description: 'One concise sentence explaining the verdict.',
-    },
-  },
-  required: ['verdict', 'reasoning'] as const,
-  additionalProperties: false,
-} as const
 
 /**
  * Runs `fn` up to `retries` times. On rate-limit-style errors (message contains `429` or “rate limit”),
@@ -67,12 +49,28 @@ async function callWithRetry(fn: () => Promise<LLMResult>, retries = 3): Promise
   throw new Error('unreachable')
 }
 
+function languageModel(judge: Judge) {
+  switch (judge.provider) {
+    case 'openai':
+      return createOpenAI({
+        apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+      })(judge.model)
+    case 'anthropic':
+      return createAnthropic({
+        apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
+      })(judge.model)
+    default:
+      throw new Error(`Unsupported provider: ${judge.provider}`)
+  }
+}
+
 /**
- * Sends the judge’s `system_prompt`, question type (with optional format hint), question text, and answer text to the configured provider and returns a parsed verdict. Output shape is enforced by the provider (JSON Schema), not by appending format text to the system prompt.
+ * Sends the judge’s `system_prompt`, question type (with optional format hint), question text, and answer text
+ * to the configured provider and returns a parsed verdict via the AI SDK (`generateText` + structured `output`).
  * Rate-limited responses are retried with backoff before surfacing as errors to the caller.
  *
  * @throws Error if `judge.provider` is not supported
- * @throws Errors from the OpenAI or Anthropic SDK (network, auth, API) propagate after retries are exhausted
+ * @throws Errors from the AI SDK or providers (network, auth, API) propagate after retries are exhausted
  */
 export async function callLLM(
   judge: Judge,
@@ -88,135 +86,28 @@ export async function callLLM(
     (typeHint ? `${typeHint}\n\n` : '') +
     `Question: ${questionText}\n\nAnswer: ${answerText}`
 
-  return callWithRetry(() => {
-    switch (judge.provider) {
-      case 'openai':
-        return callOpenAI(judge.model, systemPrompt, userMessage)
-      case 'anthropic':
-        return callAnthropic(judge.model, systemPrompt, userMessage)
-      default:
-        throw new Error(`Unsupported provider: ${judge.provider}`)
-    }
-  })
+  return callWithRetry(() => generateVerdict(judge, systemPrompt, userMessage))
 }
 
-/** Chat Completions with Structured Outputs (`response_format.type: json_schema`, `strict: true`). */
-async function callOpenAI(
-  model: string,
-  systemPrompt: string,
-  userMessage: string,
-): Promise<LLMResult> {
-  const OpenAI = (await import('openai')).default
-  const client = new OpenAI({
-    apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-    dangerouslyAllowBrowser: true,
-  })
+async function generateVerdict(judge: Judge, systemPrompt: string, userMessage: string): Promise<LLMResult> {
+  const model = languageModel(judge)
 
-  const request = {
+  const result = await generateText({
     model,
-    messages: [
-      { role: 'system' as const, content: systemPrompt },
-      { role: 'user' as const, content: userMessage },
-    ],
-    response_format: {
-      type: 'json_schema' as const,
-      json_schema: {
-        name: 'judge_verdict',
-        description: 'Rubric evaluation result for the given question and answer.',
-        schema: VERDICT_JSON_SCHEMA,
-        strict: true,
-      },
-    },
-  }
-
-  console.log('[callOpenAI] request', request)
-
-  const response = await client.chat.completions.create(request)
-
-  console.log('[callOpenAI] response', response)
-
-  const text = response.choices[0]?.message?.content ?? ''
-  return parseVerdict(text)
-}
-
-/** Messages API with `output_config.format` JSON schema (structured outputs). */
-async function callAnthropic(
-  model: string,
-  systemPrompt: string,
-  userMessage: string,
-): Promise<LLMResult> {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default
-  const client = new Anthropic({
-    apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
-    dangerouslyAllowBrowser: true,
-  })
-
-  const response = await client.messages.create({
-    model,
-    max_tokens: 256,
     system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }],
-    output_config: {
-      format: {
-        type: 'json_schema',
-        schema: { ...VERDICT_JSON_SCHEMA },
-      },
-    },
+    prompt: userMessage,
+    maxRetries: 0,
+    maxOutputTokens: judge.provider === 'anthropic' ? 256 : undefined,
+    output: Output.object({
+      schema: verdictSchema,
+      name: 'judge_verdict',
+      description: 'Rubric evaluation result for the given question and answer.',
+    }),
   })
 
-  const block = response.content[0]
-  const text = block.type === 'text' ? block.text : ''
-  return parseVerdict(text)
-}
-
-/** If the model wraps JSON in a markdown fence, extract the inner payload for JSON.parse. */
-function unwrapMarkdownJsonFence(text: string): string {
-  const t = text.trim()
-  const full = t.match(/^```(?:json)?\s*\r?\n?([\s\S]*?)\r?\n?```\s*$/i)
-  if (full) return full[1].trim()
-  const block = t.match(/```(?:json)?\s*\r?\n([\s\S]*?)\r?\n```/i)
-  if (block) return block[1].trim()
-  return t
-}
-
-/** Parses `verdict` + `reasoning` from JSON when valid; otherwise returns null. */
-function tryParseVerdictFromJson(text: string): LLMResult | null {
-  const trimmed = text.trim()
-  const unwrapped = unwrapMarkdownJsonFence(text)
-  const candidates = unwrapped === trimmed ? [trimmed] : [trimmed, unwrapped]
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate)
-      const verdict = parsed.verdict
-      const reasoning =
-        typeof parsed.reasoning === 'string' ? parsed.reasoning : candidate
-      if (verdict === 'pass' || verdict === 'fail' || verdict === 'inconclusive') {
-        return { verdict, reasoning }
-      }
-    } catch {
-      /* try next candidate or fall through */
-    }
-  }
-  return null
-}
-
-/**
- * Normalizes the model’s reply into an `LLMResult`: JSON first (including fenced), then whole-word
- * heuristics (`\bpass\b`, etc.) so substrings like “surpass” / “bypass” do not yield false passes.
- */
-function parseVerdict(text: string): LLMResult {
-  const fromJson = tryParseVerdictFromJson(text)
-  if (fromJson) {
-    return fromJson
+  if (result.output == null) {
+    throw new Error('No structured output from model')
   }
 
-  const lower = text.toLowerCase()
-  // Check `fail` before `pass` so phrases like “fails to pass” resolve to fail, not pass.
-  if (/\bfail\b/.test(lower)) return { verdict: 'fail', reasoning: text }
-  if (/\bpass\b/.test(lower)) return { verdict: 'pass', reasoning: text }
-  if (/\binconclusive\b/.test(lower)) return { verdict: 'inconclusive', reasoning: text }
-
-  return { verdict: 'inconclusive', reasoning: 'Could not determine verdict from response.' }
+  return result.output
 }
-
